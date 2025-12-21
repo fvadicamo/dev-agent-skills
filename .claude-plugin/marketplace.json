@@ -1,0 +1,34 @@
+{
+  "name": "dev-agent-skills",
+  "owner": {
+    "name": "Francesco Vadicamo",
+    "email": "fvadicamo@gmail.com"
+  },
+  "metadata": {
+    "description": "Agent skills for development workflows - Git, GitHub, and skill authoring",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "github-workflow",
+      "description": "Git commit, PR creation, review, and merge skills following Conventional Commits",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/git-commit",
+        "./skills/github-pr-creation",
+        "./skills/github-pr-merge",
+        "./skills/github-pr-review"
+      ]
+    },
+    {
+      "name": "skill-authoring",
+      "description": "Guide for creating Claude Code skills following Anthropic's best practices",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/creating-skills"
+      ]
+    }
+  ]
+}
