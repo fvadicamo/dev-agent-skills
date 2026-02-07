@@ -45,6 +45,9 @@ EOF
 
 - **ALWAYS** check CLAUDE.md conventions first - use project format if it differs
 - **ALWAYS** include scope in parentheses
+- **ALWAYS** use present tense imperative verb for the subject
+- **NEVER** end subject with a period
+- **NEVER** exceed 50 chars in the subject line
 - **NEVER** use generic messages ("update code", "fix bug", "changes")
 - Group related changes into a single focused commit
 

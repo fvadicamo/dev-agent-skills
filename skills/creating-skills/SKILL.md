@@ -149,7 +149,7 @@ Match specificity to the task's fragility:
 - **ALWAYS** reference bundled files from SKILL.md so Claude discovers them
 - **NEVER** duplicate info between SKILL.md and reference files
 - **NEVER** create wrapper scripts for single commands
-- **NEVER** include extraneous files (README.md, CHANGELOG.md, INSTALLATION_GUIDE.md)
+- **NEVER** include extraneous files (README.md, CHANGELOG.md, INSTALLATION_GUIDE.md, QUICK_REFERENCE.md)
 - **NEVER** explain things Claude already knows (standard libraries, common tools, basic patterns)
 
 ## References
