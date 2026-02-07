@@ -252,6 +252,25 @@ Documentation:
 - OpenAPI spec at /openapi.json
 ```
 
+## Good vs Bad Examples
+
+**Good**:
+```
+feat(validation): add URLValidator with domain whitelist
+fix(auth): use hmac.compare_digest for secure key comparison
+refactor(template): consolidate filename sanitization logic
+test(security): add 102 path traversal prevention tests
+```
+
+**Bad**:
+```
+update validation code           # no type, no scope, vague
+feat: add stuff                  # missing scope, too vague
+fix(auth): fix bug               # circular, not specific
+chore: make changes              # missing scope, vague
+feat(security): improve things.  # has period, vague
+```
+
 ## Commits with Trailers
 
 ### Single Issue
