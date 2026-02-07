@@ -3,141 +3,104 @@ name: github-pr-creation
 description: Creates GitHub Pull Requests with automated validation and task tracking. Use when user wants to create PR, open pull request, submit for review, or check if ready for PR. Analyzes commits, validates task completion, generates Conventional Commits title and description, suggests labels. NOTE - for merging existing PRs, use github-pr-merge instead.
 ---
 
-# GitHub PR Creation
+# GitHub PR creation
 
 Creates Pull Requests with task validation, test execution, and Conventional Commits formatting.
 
-## Quick Start
+## Current state
 
-```bash
-# 1. Verify GitHub CLI
-gh --version && gh auth status
+!`git rev-parse --abbrev-ref HEAD 2>/dev/null`
+!`git log @{u}..HEAD --oneline 2>/dev/null || echo "(no upstream tracking)"`
 
-# 2. Gather information (Claude does this directly)
-git log develop..HEAD --oneline        # Commits to include
-git diff develop --stat                 # Files changed
-git rev-parse --abbrev-ref HEAD        # Current branch
+## Core workflow
 
-# 3. Run project tests
-make test  # or: pytest, npm test
+### 1. Confirm target branch
 
-# 4. Create PR (after generating content)
-gh pr create --title "..." --body "..." --base develop --label feature
+**ALWAYS ask user before proceeding:**
+
+```
+Creating PR from [current-branch] to [target-branch]. Correct?
 ```
 
-## Core Workflow
+| Branch flow | Typical target |
+|-------------|---------------|
+| feature/* | develop |
+| fix/* | develop |
+| hotfix/* | main/master |
+| develop | main/master |
 
-### 1. Verify Environment
+### 2. Search for task documentation
 
-```bash
-gh --version && gh auth status
-```
+Look for task/spec files that describe what this PR should accomplish. Common locations by tool:
 
-If not installed: `brew install gh` then `gh auth login`
+| Tool/Convention | Path |
+|-----------------|------|
+| AWS Kiro | `.kiro/specs/*/tasks.md` |
+| Cursor | `.cursor/rules/*.md`, `.cursorrules` |
+| Trae | `.trae/rules/*.md` |
+| GitHub Issues | `gh issue list --assignee @me --state open` |
+| Generic | `docs/specs/`, `specs/`, `tasks.md`, `TODO.md` |
 
-### 2. Confirm Target Branch
+Extract task IDs, titles, descriptions, and requirements references when found.
 
-**Always ask user**:
-```
-I'm about to create a PR from [current-branch] to [target-branch]. Is this correct?
-- feature branch → develop (90% of cases)
-- develop → master/main (releases)
-```
+### 3. Analyze commits
 
-### 3. Gather Information
+For each commit on this branch, identify type, scope, task references, and breaking changes. Map commits to documented tasks when task files exist.
 
-Execute these commands and analyze results directly:
-
-```bash
-# Current branch
-git rev-parse --abbrev-ref HEAD
-
-# Commits since base branch
-git log [base-branch]..HEAD --pretty=format:"%H|%an|%ai|%s"
-
-# Commits with full details (for context)
-git log [base-branch]..HEAD --oneline
-
-# Files changed
-git diff [base-branch] --stat
-
-# Remote tracking status
-git status -sb
-```
-
-### 4. Search for Task Documentation
-
-Look for task files in these locations (in order):
-1. `.kiro/specs/*/tasks.md`
-2. `docs/specs/*/tasks.md`
-3. `specs/*/tasks.md`
-4. Any `tasks.md` in project root
-
-Extract from task files:
-- Task IDs (format: `Task X` or `Task X.Y`)
-- Task titles and descriptions
-- Requirements (format: `Requirements: X, Y, Z`)
-
-### 5. Analyze Commits
-
-For each commit, identify:
-- **Type**: feat, fix, refactor, docs, test, chore, ci, perf, style
-- **Scope**: component/module affected (kebab-case)
-- **Task references**: look for `task X.Y`, `Task X`, `#X.Y` patterns
-- **Breaking changes**: exclamation mark after type/scope, or `BREAKING CHANGE` in body
-
-Map commits to documented tasks when task files exist.
-
-### 6. Verify Task Completion
+### 4. Verify task completion
 
 If task documentation exists:
-1. Identify main task from branch name (e.g., `feature/task-2-*` → Task 2)
+
+1. Identify main task from branch name (e.g., `feature/task-2-*` -> Task 2)
 2. Find all sub-tasks (e.g., Task 2.1, 2.2, 2.3)
 3. Check which sub-tasks are referenced in commits
 4. Report missing sub-tasks
 
-**If tasks incomplete**: STOP and inform user with:
+**If tasks incomplete**, STOP and show status:
 ```
-✗ Task 2 INCOMPLETE: 1/3 sub-tasks missing
-- Task 2.1: ✓ Implemented
-- Task 2.2: ✓ Implemented
-- Task 2.3: ✗ MISSING
+Task 2 INCOMPLETE: 1/3 sub-tasks missing
+- Task 2.1: done
+- Task 2.2: done
+- Task 2.3: MISSING
 ```
 
-### 7. Run Tests
+Ask user whether to complete missing tasks or proceed anyway.
 
-Detect and run project tests:
-- If Makefile with `test` target: `make test`
-- If package.json: `npm test`
-- If Python project: `pytest`
+### 5. Run tests
 
-**Tests MUST pass before creating PR.**
+Run the project test suite. Tests **MUST** pass before creating PR.
 
-### 8. Determine PR Type
+### 6. Determine PR type and generate title
 
-| Branch Flow | PR Type | Title Prefix |
-|-------------|---------|--------------|
-| feature/* → develop | Feature | `feat(scope):` |
-| fix/* → develop | Bugfix | `fix(scope):` |
-| hotfix/* → main | Hotfix | `hotfix(scope):` |
-| develop → main | Release | `release:` |
-| refactor/* → develop | Refactoring | `refactor(scope):` |
-
-### 9. Generate PR Content
-
-Use appropriate template from `references/pr_templates.md` based on PR type.
+| Branch flow | Title prefix |
+|-------------|-------------|
+| feature/* -> develop | `feat(scope):` |
+| fix/* -> develop | `fix(scope):` |
+| hotfix/* -> main | `hotfix(scope):` |
+| develop -> main | `release:` |
+| refactor/* -> develop | `refactor(scope):` |
 
 **Title format**: `<type>(<scope>): <description>`
 - Type: dominant commit type (feat > fix > refactor)
-- Scope: most common scope from commits, or task-related scope (kebab-case)
+- Scope: most common scope from commits (kebab-case)
 - Description: imperative, lowercase, no period, max 50 chars
 
-**Body**: Select template based on PR type and populate with gathered data.
+### 7. Generate PR body
 
-### 10. Suggest Labels
+Use the appropriate template from `references/pr_templates.md` based on PR type and populate with gathered data.
 
-| Commit Type | Labels |
-|-------------|--------|
+### 8. Suggest labels
+
+**ALWAYS check available labels first:**
+
+```bash
+gh label list
+```
+
+Match commit types to available project labels. The project may use different names than standard (e.g., "feature" instead of "enhancement").
+
+| Commit type | Common label names |
+|-------------|-------------------|
 | feat | feature, enhancement |
 | fix | bug, bugfix |
 | refactor | refactoring, tech-debt |
@@ -146,11 +109,11 @@ Use appropriate template from `references/pr_templates.md` based on PR type.
 | security | security |
 | hotfix | urgent, priority:high |
 
-Check available labels: `gh label list`
+**If no matching label exists**: suggest creating one. The user may have removed default labels, so offering to add relevant ones is appropriate.
 
-### 11. Create PR
+### 9. Create PR
 
-**Show content to user first**, then:
+**ALWAYS show title, body, and labels for user approval first.**
 
 ```bash
 gh pr create --title "[title]" --body "$(cat <<'EOF'
@@ -159,43 +122,16 @@ EOF
 )" --base [base_branch] --label [labels]
 ```
 
-## Information Gathering Checklist
+## Important rules
 
-Before generating PR, ensure you have:
-
-- [ ] Current branch name
-- [ ] Base branch confirmed with user
-- [ ] List of commits with types and scopes
-- [ ] Files changed summary
-- [ ] Task documentation (if exists)
-- [ ] Task completion status
-- [ ] Test results (must pass)
-- [ ] Available labels in repo
-
-## Error Handling
-
-**Missing GitHub CLI**: `brew install gh && gh auth login`
-
-**Incomplete Tasks**: Show status, ask user to complete or proceed anyway.
-
-**Failed Tests**: Show failures, ask user to fix before PR.
-
-**No tasks.md**: Proceed with commit-based PR, generate content from commits only.
-
-## Important Rules
-
-- **NEVER** modify repository files (read-only analysis)
 - **ALWAYS** confirm target branch with user
 - **ALWAYS** run tests before creating PR
 - **ALWAYS** show PR content for approval before creating
-- **NEVER** create PR without user confirmation
+- **ALWAYS** check available labels with `gh label list` before suggesting
 - **ALWAYS** use HEREDOC for body to preserve formatting
-
-## Related Skills
-
-- **git-commit** - Commit message format and conventions
+- **NEVER** create PR without user confirmation
+- **NEVER** modify repository files (read-only analysis)
 
 ## References
 
-- `references/pr_templates.md` - Complete PR templates for all types
-- `references/conventional_commits.md` - Commit format guide
+- `references/pr_templates.md` - PR body templates for all types (feature, release, bugfix, hotfix, refactoring, docs, CI/CD)
