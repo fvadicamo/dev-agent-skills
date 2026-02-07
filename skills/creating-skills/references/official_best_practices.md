@@ -1,145 +1,72 @@
-# Anthropic Official Best Practices for Skills
+# Official best practices for skills
 
-Source: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices
+Source: [Claude Code skills docs](https://code.claude.com/docs/en/skills), [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview), [Anthropic skills repo](https://github.com/anthropics/skills)
 
 ---
 
-## What is a Skill?
+## Core principle: Claude is already smart
 
-A skill is a markdown file (`SKILL.md`) that teaches Claude how to perform a specific task. Skills enable Claude to follow custom workflows, use external tools, and maintain consistency across interactions.
+> "Default assumption: Claude is already very smart. Only add context Claude doesn't already have."
 
-## SKILL.md Format
-
-### Required: YAML Frontmatter
-
-```yaml
----
-name: skill-name
-description: What the skill does and when to use it
----
-```
-
-### Name Field
-- Use lowercase with hyphens
-- Be descriptive but concise
-- Naming patterns:
-  - **Gerund form**: `processing-pdfs`, `analyzing-spreadsheets`, `managing-databases`
-  - **Noun phrases**: `github-pr-creation`, `code-review`
-
-### Description Field (CRITICAL)
-
-The description determines when Claude uses the skill. It should include:
-1. **What**: What the skill does
-2. **When**: Trigger phrases and conditions
-3. **Capabilities**: Key features
-
-**Formula:**
-```
-<What it does>. Use when <trigger conditions>. <Key capabilities>.
-```
-
-**Example:**
-```
-Processes PDF documents for text extraction and analysis. Use when user
-wants to read PDF, extract PDF content, or analyze PDF documents. Supports
-multi-page documents, OCR for scanned PDFs, and structured data extraction.
-```
-
-## Token Budget
-
-### Primary concern: Quality over quantity
-
-> "Not every token in your Skill has an immediate cost... However, being concise
-> in SKILL.md still matters."
-
-### Guidelines
-- **SKILL.md body**: Keep under 500 lines for optimal performance
-- **Description**: Maximum 1024 characters
-- **Quick Start**: Under 30 lines
-- **Split content** when approaching limits
-
-### Progressive Disclosure
-
-```
-SKILL.md (always loaded)
-    ↓
-references/ (loaded when needed)
-    ↓
-external resources (rarely needed)
-```
-
-## Core Principle: Claude is Already Smart
-
-> "Default assumption: Claude is already very smart. Only add context
-> Claude doesn't already have."
-
-### Challenge Each Piece of Information
-
-Ask yourself:
+**Challenge each piece of information:**
 - Does Claude really need this explanation?
 - Can I assume Claude knows this?
 - Does this paragraph justify its token cost?
 
-### What NOT to Include
-- Basic programming concepts
-- Common tool usage (git, npm, etc.)
-- Standard library documentation
-- Explanations of well-known patterns
+**What NOT to include**: basic programming concepts, common tool usage (git, npm), standard library docs, well-known patterns.
 
-### What TO Include
-- Project-specific conventions
-- Custom workflows
-- Non-obvious requirements
-- Domain-specific knowledge Claude wouldn't have
+**What TO include**: project-specific conventions, custom workflows, non-obvious requirements, domain knowledge Claude wouldn't have.
 
-## Helper Scripts
+## Progressive disclosure
 
-### When Scripts Add Value
+Skills use a three-level loading system:
 
-**Good use cases:**
-- Complex multi-step processing
-- JSON parsing and transformation
-- State management across calls
-- Integration with external APIs
-- Calculations or data analysis
+1. **Metadata** (name + description) - always in context (~100 words per skill)
+2. **SKILL.md body** - when skill triggers (<5k words recommended)
+3. **Bundled resources** - as needed (scripts execute without loading; references load on demand)
 
-**Bad use cases (avoid):**
-- Single command wrappers
-- Simple file operations
-- Basic text transformations
-- Anything Claude can do inline
+### Context budget
 
-### Script Guidelines
+Skill descriptions share a budget that scales at 2% of the context window, with a fallback of 16,000 characters. Override with `SLASH_COMMAND_TOOL_CHAR_BUDGET` env var.
 
-```python
-#!/usr/bin/env python3
-"""Clear description of what this script does."""
+### Splitting patterns
 
-import json
-import sys
+When SKILL.md approaches 500 lines, split content into separate files:
 
-def main():
-    # Use stdin for input when possible
-    data = json.load(sys.stdin)
+- **Pattern 1: High-level guide with references** - Keep workflow in SKILL.md, move detailed docs to references/
+- **Pattern 2: Domain-specific organization** - One reference per domain area (e.g., `references/api_docs.md`, `references/schemas.md`)
+- **Pattern 3: Conditional details** - Keep decision logic in SKILL.md, move variant-specific details to references/
 
-    # Process data
-    result = process(data)
+**Guidelines:**
+- Avoid deeply nested references - keep one level deep from SKILL.md
+- For files over 100 lines, include a table of contents at the top
+- For very large references (>10k words), include grep search patterns in SKILL.md
+- Information should live in either SKILL.md OR references, not both
 
-    # Output JSON to stdout
-    print(json.dumps(result, indent=2))
+## Frontmatter validation rules
 
-if __name__ == "__main__":
-    main()
-```
+| Field | Constraint |
+|-------|-----------|
+| `name` | Max 64 chars, lowercase + numbers + hyphens only, no XML tags, no reserved words ("anthropic", "claude") |
+| `description` | Max 1024 chars, non-empty if provided, no XML tags |
+| Allowed properties | `name`, `description`, `license`, `allowed-tools`, `metadata`, `compatibility`, `argument-hint`, `disable-model-invocation`, `user-invocable`, `model`, `context`, `agent`, `hooks` |
 
-- Output structured JSON
-- Use stdin/stdout for piping
-- Handle errors gracefully
-- Keep single responsibility
+## Skills and commands unification
 
-## User Confirmation Patterns
+Custom slash commands (`.claude/commands/*.md`) and skills (`.claude/skills/*/SKILL.md`) are now unified. Both create `/name` invocations and support the same frontmatter. Existing commands files continue to work. If a skill and a command share the same name, the skill takes precedence.
 
-### When to Confirm
+## Discovery hierarchy
+
+Skills are discovered from multiple locations (higher priority wins):
+
+1. **Enterprise** (managed settings)
+2. **Personal** (`~/.claude/skills/`)
+3. **Project** (`.claude/skills/`)
+4. **Plugin** (namespaced as `plugin-name:skill-name`)
+
+Additional directories via `--add-dir` are also supported with live change detection.
+
+## User confirmation patterns
 
 **ALWAYS confirm before:**
 - Modifying user files
@@ -150,127 +77,52 @@ if __name__ == "__main__":
 **Don't over-confirm:**
 - Read-only operations
 - Reversible actions
-- Intermediate steps in approved workflow
+- Intermediate steps in an approved workflow
 
-### Confirmation Format
+## Anti-patterns
 
-```markdown
-## Important Rules
-
-- **ALWAYS** confirm before modifying files
-- **ALWAYS** show content for approval before creating
-- **NEVER** skip user confirmation for file changes
-```
-
-## Skill Structure Best Practices
-
-### Recommended Sections (in order)
-
-1. **Title**: `# Skill Name`
-2. **One-liner**: Brief description
-3. **Quick Start**: Minimal copy-paste example
-4. **Core Workflow**: Numbered steps
-5. **Helper Scripts**: Table if applicable
-6. **Important Rules**: Bold constraints
-7. **References**: Links to additional docs
-
-### Quick Start Pattern
-
-```bash
-# 1. First step
-command_one
-
-# 2. Second step
-command_two
-
-# 3. Third step
-command_three
-```
-
-- Numbered steps
-- Actual commands (not pseudocode)
-- Copy-paste ready
-- Minimal (3-7 steps)
-
-### Core Workflow Pattern
-
-```markdown
-## Core Workflow
-
-### 1. Step Name
-
-Brief description of what this step does.
-
-\`\`\`bash
-actual_command --with-args
-\`\`\`
-
-### 2. Next Step
-
-...
-```
-
-## Directory Structure
-
-```
-~/.claude/skills/<skill-name>/
-├── SKILL.md              # Required: main skill file
-├── scripts/              # Optional: helper scripts
-│   └── processor.py
-└── references/           # Optional: detailed documentation
-    ├── examples.md
-    └── api-reference.md
-```
-
-## Anti-Patterns
-
-| Pattern | Problem | Solution |
-|---------|---------|----------|
+| Pattern | Problem | Instead |
+|---------|---------|---------|
 | Wrapper scripts | No value added | Inline commands |
 | Verbose explanations | Token waste | Trust Claude's knowledge |
-| Multiple paths | Confusion | One clear workflow |
+| Multiple paths | Confusing | One clear workflow |
 | Custom systems | Non-standard | Use official patterns |
 | Over-confirmation | Friction | Confirm only critical actions |
+| Deeply nested references | Hard to discover | Keep one level deep |
+| Duplicated info | Drift risk, token waste | Single source of truth |
+| Extraneous files | Clutter | Only SKILL.md + resources |
 
-## Testing Skills
+## Quality checklist
 
-### Trigger Testing
-Verify skill activates on expected phrases:
-- "create a PR"
-- "open pull request"
-- "merge to develop"
+Before finalizing a skill:
 
-### Workflow Testing
-- Follow Quick Start steps manually
-- Verify each command works
-- Check error handling
+- [ ] **Frontmatter**: description present, clear, under 1024 chars
+- [ ] **Description**: includes WHAT + WHEN triggers + capabilities
+- [ ] **Naming**: lowercase, hyphens, max 64 chars
+- [ ] **Body**: under 500 lines, no duplication with references
+- [ ] **Resources**: referenced from SKILL.md, one level deep
+- [ ] **Scripts**: only value-add, not wrappers
+- [ ] **Rules**: critical constraints marked with **ALWAYS**/**NEVER**
+- [ ] **Test**: skill triggers on expected phrases
 
-### Edge Cases
+## Testing
+
+### Trigger testing
+Verify skill activates on expected user phrases. Test with multiple phrasings.
+
+### Model testing
+Test with all models you plan to support (Haiku, Sonnet, Opus have different capabilities). Build evaluations before writing extensive documentation.
+
+### Edge cases
 - Missing prerequisites
 - Invalid input
 - Partial completion
 
-## Maintenance
+## What NOT to include in a skill
 
-### When to Update
-- Workflow changes
-- New capabilities added
-- User feedback received
-- Tools/APIs change
+A skill should only contain files that directly support its functionality:
 
-### Keep Skills Focused
-- One skill = one workflow
-- Split if doing multiple unrelated things
-- Prefer multiple small skills over one large skill
-
----
-
-## Summary: Key Takeaways
-
-1. **Description is critical** - determines when skill is used
-2. **Claude is smart** - don't over-explain
-3. **Stay under 500 lines** - split if needed
-4. **Scripts only for value-add** - not wrappers
-5. **Confirm critical actions** - but don't over-confirm
-6. **One clear workflow** - not multiple paths
-7. **Test trigger phrases** - verify activation
+- No README.md, INSTALLATION_GUIDE.md, QUICK_REFERENCE.md, CHANGELOG.md
+- No user-facing documentation (the skill IS the documentation for Claude)
+- No setup/testing procedures
+- No auxiliary context about the creation process
