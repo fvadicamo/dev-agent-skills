@@ -1,6 +1,6 @@
-# Gemini Code Assist - Severity Guide
+# Severity guide
 
-Reference guide for interpreting severity levels from Gemini Code Assist review comments.
+Reference guide for interpreting severity levels from automated review comments (Gemini, Cursor, and others).
 
 ## Severity Badges
 
@@ -79,8 +79,14 @@ Gemini uses visual badges in review comments to indicate severity:
 "low-priority.svg" → LOW
 ```
 
+### Cursor Comments
+```
+<!-- **High Severity** --> → HIGH
+<!-- **Medium Severity** --> → MEDIUM
+```
+
 ### Keyword Detection (Fallback)
-When badges aren't present, infer from keywords:
+When badges or HTML comments aren't present, infer from keywords:
 
 | Keywords | Severity |
 |----------|----------|

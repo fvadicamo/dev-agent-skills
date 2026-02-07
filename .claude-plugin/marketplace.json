@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills for development workflows - Git, GitHub, and skill authoring",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "plugins": [
     {
