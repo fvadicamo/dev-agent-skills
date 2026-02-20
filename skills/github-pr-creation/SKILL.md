@@ -119,9 +119,22 @@ Match commit types to available project labels. The project may use different na
 
 **If no matching label exists**: suggest creating one. The user may have removed default labels, so offering to add relevant ones is appropriate.
 
-### 9. Create PR
+### 9. Determine milestone
 
-**ALWAYS show title, body, and labels for user approval first.**
+Check for open milestones:
+
+```bash
+gh api repos/$(gh repo view --json nameWithOwner -q '.nameWithOwner')/milestones \
+  --jq '.[] | select(.state == "open") | "\(.number): \(.title)"'
+```
+
+- If one active milestone exists: assign the PR to it (all work in progress belongs to the next release)
+- If multiple milestones exist: ask the user which one applies
+- If no milestones exist: skip (do not create one automatically)
+
+### 10. Create PR
+
+**ALWAYS show title, body, labels, and milestone for user approval first.**
 
 ```bash
 gh pr create \
@@ -132,6 +145,7 @@ EOF
 )" \
   --base [base_branch] \
   --label "[label1]" --label "[label2]" \
+  --milestone "[milestone-title]" \
   --reviewer "[username]"          # if teammates are known
 ```
 
@@ -146,8 +160,10 @@ awaiting CI, or created only to trigger AI bot review on the branch).
 - **ALWAYS** check available labels with `gh label list` before suggesting
 - **ALWAYS** use HEREDOC for body to preserve formatting
 - **ALWAYS** add `--label` for each label separately (not comma-separated in one string)
+- **ALWAYS** check for open milestones and assign if one is active
 - **NEVER** create PR without user confirmation
 - **NEVER** modify repository files (read-only analysis)
+- **NEVER** create a milestone automatically - only assign existing ones
 - Use `--draft` for PRs not ready for merge review
 - Use `--reviewer` when teammates are known from team config or CODEOWNERS
 
