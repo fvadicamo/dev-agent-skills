@@ -21,16 +21,21 @@ Fetch both inline comments and PR-level reviews (needed for CodeRabbit "outside 
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 PR=$(gh pr view --json number -q '.number')
 
-# Inline review comments (Gemini, CodeRabbit inline)
-gh api repos/$REPO/pulls/$PR/comments
+# Inline review comments - filter out replies (keep only originals)
+gh api repos/$REPO/pulls/$PR/comments --jq '
+  [.[] | select(.in_reply_to_id == null) |
+   {id, path, user: .user.login, body: .body[0:200]}]
+'
 
-# PR-level reviews (CodeRabbit "outside diff" comments are here)
-gh api repos/$REPO/pulls/$PR/reviews
+# PR-level reviews with non-empty body (CodeRabbit "outside diff" comments)
+gh api repos/$REPO/pulls/$PR/reviews --jq '
+  [.[] | select(.body | length > 0) |
+   {id, user: .user.login, state, body: .body[0:200]}]
+'
 ```
 
-Filter out replies from inline comments (`in_reply_to_id != null`). For PR-level
-reviews, parse the body for CodeRabbit `<details>` blocks containing "outside diff"
-comments - extract file path, line range, and comment text from each block.
+For PR-level reviews, parse the body for CodeRabbit `<details>` blocks containing
+"outside diff" comments - extract file path, line range, and comment text from each block.
 
 Classify all originals by severity and process in order: CRITICAL > HIGH > MEDIUM > LOW.
 
