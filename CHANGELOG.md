@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-02-20
+
+### Changed
+
+#### github-pr-review
+- Added CodeRabbit severity detection to `references/severity_guide.md`: emoji+italic pattern (`_⚠️ Potential issue_`, `_🧹 Nitpick_`, `_🔧 Optional_`, etc.), secondary color badges (`_🟡 Minor_`, `_🟠 Major_`) as binding severity indicator
+- Documented CodeRabbit "outside diff" comments pattern: embedded in PR-level review body `<details>` blocks, not in `pulls/$PR/comments`
+- Step 1: added `pulls/$PR/reviews` fetch alongside `pulls/$PR/comments` to capture outside diff comments
+- Updated severity table in step 1 with CodeRabbit indicators
+- Current PR context now includes milestone: `PR #N: title (state) | Milestone: name`
+- Added step 7: verify milestone at end of review; suggest assigning if missing and open milestones exist (never assigns automatically)
+
+#### github-pr-creation
+- Added `.s2s/plans/*.md` to task documentation search paths (Spec2Ship projects)
+- Added `chore/*`, `ci/*`, `docs/*` branch patterns to title prefix table
+- Added breaking change handling: add `breaking` label + `## Breaking changes` body section
+- Added step 9: detect open milestones and assign if exactly one is active; ask user if multiple exist
+- Updated `gh pr create` command with `--milestone`, `--reviewer`, correct multi-`--label` syntax
+- Added `--draft` usage note (WIP, CI wait, AI bot trigger)
+
+#### github-pr-merge
+- Added step 2: check PR milestone before merge; warn (not block) if open milestones exist but PR has none
+- Added milestone line to pre-merge checklist summary (step 4)
+- Added step 7: after merge, check `open_issues` on milestone; offer to close it if all items are done
+- Renumbered steps: old 2→3, 3→4, 4→5, 5→6; new steps are 2 and 7
+
 ## [1.1.0] - 2026-02-07
 
 ### Added
