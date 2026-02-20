@@ -9,7 +9,7 @@ Resolves Pull Request review comments with severity-based prioritization, fix ap
 
 ## Current PR
 
-!`gh pr view --json number,title,state -q '"PR #\(.number): \(.title) (\(.state))"' 2>/dev/null`
+!`gh pr view --json number,title,state,milestone -q '"PR #\(.number): \(.title) (\(.state)) | Milestone: \(.milestone.title // "none")"' 2>/dev/null`
 
 ## Core workflow
 
@@ -96,6 +96,27 @@ After addressing all comments, formally submit a review:
 - `gh pr review $PR --request-changes --body "..."` - critical issues remain
 - `gh pr review $PR --comment --body "..."` - progress update, no decision yet
 
+### 7. Verify milestone
+
+```bash
+gh pr view $PR --json milestone -q '.milestone.title // "none"'
+```
+
+If the PR has no milestone, check for open milestones:
+
+```bash
+REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
+gh api repos/$REPO/milestones --jq '[.[] | select(.state=="open")] | .[] | "\(.number): \(.title)"'
+```
+
+If open milestones exist, inform the user and suggest assigning:
+
+```bash
+gh pr edit $PR --milestone "[milestone-title]"
+```
+
+Do **not** assign automatically. This is a reminder only.
+
 ## Avoiding review loops
 
 When bots (Gemini, Codex, etc.) review every push:
@@ -111,8 +132,10 @@ When bots (Gemini, Codex, etc.) review every push:
 - **ALWAYS** run tests before pushing
 - **ALWAYS** reply to resolved threads using standard templates
 - **ALWAYS** submit formal review (`gh pr review`) after addressing all comments
+- **ALWAYS** check milestone at the end and remind if missing
 - **NEVER** use emojis in commit messages or thread replies
 - **NEVER** skip HIGH/CRITICAL comments without explicit user approval
+- **NEVER** assign milestone automatically - suggest only
 - **Functional fixes** -> separate commits (one per fix)
 - **Cosmetic fixes** -> batch into single `style:` commit
 
