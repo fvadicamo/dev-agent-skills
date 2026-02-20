@@ -1,6 +1,6 @@
 # Severity guide
 
-Reference guide for interpreting severity levels from automated review comments (Gemini, Cursor, and others).
+Reference guide for interpreting severity levels from automated review comments (Gemini, CodeRabbit, Cursor, and others).
 
 ## Severity Badges
 
@@ -70,7 +70,7 @@ Gemini uses visual badges in review comments to indicate severity:
 
 ## Detection Patterns
 
-### Badge Detection (Primary)
+### Gemini Badge Detection (Primary for Gemini)
 ```python
 # In comment body, look for:
 "critical.svg" → CRITICAL
@@ -78,6 +78,44 @@ Gemini uses visual badges in review comments to indicate severity:
 "medium-priority.svg" → MEDIUM
 "low-priority.svg" → LOW
 ```
+
+### CodeRabbit Detection
+
+CodeRabbit does **not** use SVG badges. It uses emoji + italic text in the comment body.
+The pattern is: `_<emoji> <label>_` or `_<emoji> <label>_ | _<color> <severity>_`
+
+| Comment pattern | Severity |
+|----------------|----------|
+| `_🔒 Security_` or `_🚨 Critical_` | CRITICAL |
+| `_⚠️ Potential issue_` | HIGH |
+| `_🐛 Bug_` | HIGH |
+| `_⚡ Performance_` | HIGH |
+| `_💡 Suggestion_` | MEDIUM |
+| `_🧹 Nitpick_` | LOW |
+| `_🔧 Optional_` | LOW (skip by default) |
+
+When a secondary color badge is present (`_🔴 Critical_`, `_🟠 Major_`, `_🟡 Minor_`, `_🔵 Info_`),
+use the **secondary badge** as the binding severity indicator:
+
+| Secondary badge | Maps to |
+|----------------|---------|
+| `_🔴 Critical_` | CRITICAL |
+| `_🟠 Major_` | HIGH |
+| `_🟡 Minor_` | LOW |
+| `_🔵 Info_` | LOW |
+
+**CodeRabbit "outside diff" comments** are not posted as inline review comments
+(they don't appear in `pulls/$PR/comments`). Instead, they are embedded in the
+PR-level review body (`pulls/$PR/reviews`) inside `<details>` blocks with
+"Outside diff range comments" as the summary. These must be fetched separately:
+
+```bash
+gh api repos/$REPO/pulls/$PR/reviews \
+  --jq '.[] | select(.user.login | startswith("coderabbitai")) | .body'
+```
+
+Then parse the markdown body to extract file path, line range, and comment text
+from the `<details>/<summary>` blocks.
 
 ### Cursor Comments
 ```

@@ -15,22 +15,33 @@ Resolves Pull Request review comments with severity-based prioritization, fix ap
 
 ### 1. Fetch and classify comments
 
+Fetch both inline comments and PR-level reviews (needed for CodeRabbit "outside diff" comments):
+
 ```bash
 REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 PR=$(gh pr view --json number -q '.number')
+
+# Inline review comments (Gemini, CodeRabbit inline)
 gh api repos/$REPO/pulls/$PR/comments
+
+# PR-level reviews (CodeRabbit "outside diff" comments are here)
+gh api repos/$REPO/pulls/$PR/reviews
 ```
 
-Filter out replies (`in_reply_to_id != null`). Classify originals by severity and process in order: CRITICAL > HIGH > MEDIUM > LOW.
+Filter out replies from inline comments (`in_reply_to_id != null`). For PR-level
+reviews, parse the body for CodeRabbit `<details>` blocks containing "outside diff"
+comments - extract file path, line range, and comment text from each block.
+
+Classify all originals by severity and process in order: CRITICAL > HIGH > MEDIUM > LOW.
 
 | Severity | Indicators | Action |
 |----------|------------|--------|
-| CRITICAL | `critical.svg`, "security", "vulnerability" | Must fix |
-| HIGH | `high-priority.svg`, "High Severity" | Should fix |
-| MEDIUM | `medium-priority.svg`, "Medium Severity" | Recommended |
-| LOW | `low-priority.svg`, "style", "nit" | Optional |
+| CRITICAL | `critical.svg`, `_🔒 Security_`, `_🔴 Critical_`, "security", "vulnerability" | Must fix |
+| HIGH | `high-priority.svg`, `_⚠️ Potential issue_`, `_🐛 Bug_`, `_🟠 Major_`, "High Severity" | Should fix |
+| MEDIUM | `medium-priority.svg`, `_💡 Suggestion_`, "Medium Severity" | Recommended |
+| LOW | `low-priority.svg`, `_🧹 Nitpick_`, `_🔧 Optional_`, `_🟡 Minor_`, "style", "nit" | Optional |
 
-See `references/severity_guide.md` for full detection patterns (Gemini badges, Cursor comments, keyword fallback, related comments heuristics).
+See `references/severity_guide.md` for full detection patterns (Gemini badges, CodeRabbit emoji, Cursor comments, keyword fallback, related comments heuristics).
 
 ### 2. Process each comment
 
