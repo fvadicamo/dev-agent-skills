@@ -84,38 +84,54 @@ Gemini uses visual badges in review comments to indicate severity:
 CodeRabbit does **not** use SVG badges. It uses emoji + italic text in the comment body.
 The pattern is: `_<emoji> <label>_` or `_<emoji> <label>_ | _<color> <severity>_`
 
+CodeRabbit classifies comments along two axes: **type** (what kind of issue) and **severity** (how impactful).
+
+#### Comment types (primary label)
+
 | Comment pattern | Severity |
 |----------------|----------|
 | `_🔒 Security_` or `_🚨 Critical_` | CRITICAL |
 | `_⚠️ Potential issue_` | HIGH |
 | `_🐛 Bug_` | HIGH |
 | `_⚡ Performance_` | HIGH |
+| `_🛠️ Refactor suggestion_` | MEDIUM |
 | `_💡 Suggestion_` | MEDIUM |
-| `_🧹 Nitpick_` | LOW |
+| `_🧹 Nitpick_` | LOW (only in assertive mode) |
 | `_🔧 Optional_` | LOW (skip by default) |
 
-When a secondary color badge is present (`_🔴 Critical_`, `_🟠 Major_`, `_🟡 Minor_`, `_🔵 Info_`),
-use the **secondary badge** as the binding severity indicator:
+#### Severity levels (secondary color badge)
 
-| Secondary badge | Maps to |
-|----------------|---------|
-| `_🔴 Critical_` | CRITICAL |
-| `_🟠 Major_` | HIGH |
-| `_🟡 Minor_` | LOW |
-| `_🔵 Info_` | LOW |
+When a secondary color badge is present, use it as the **binding** severity indicator
+(it overrides the type-based default above):
 
-**CodeRabbit "outside diff" comments** are not posted as inline review comments
-(they don't appear in `pulls/$PR/comments`). Instead, they are embedded in the
-PR-level review body (`pulls/$PR/reviews`) inside `<details>` blocks with
-"Outside diff range comments" as the summary. These must be fetched separately:
+| Secondary badge | Official name | Maps to |
+|----------------|---------------|---------|
+| `_🔴 Critical_` | Critical | CRITICAL |
+| `_🟠 Major_` | Major | HIGH |
+| `_🟡 Minor_` | Minor | LOW |
+| `_🔵 Trivial_` | Trivial | LOW (skip by default) |
+| `_⚪ Info_` | Info | LOW (informational, no action needed) |
 
-```bash
-gh api repos/$REPO/pulls/$PR/reviews \
-  --jq '.[] | select(.user.login | startswith("coderabbitai")) | .body'
-```
+Note: some older reviews may use `_🔵 Info_` instead of `_🔵 Trivial_`. Treat both as LOW.
 
-Then parse the markdown body to extract file path, line range, and comment text
-from the `<details>/<summary>` blocks.
+#### Assertive vs chill mode
+
+CodeRabbit has two profiles configured via `.coderabbit.yaml`:
+- `profile: chill` (default) - lighter feedback, nitpicks are hidden
+- `profile: assertive` - full feedback, includes nitpick comments
+
+When reviewing a repo in `chill` mode, nitpick sections will not appear in the review body.
+
+**CodeRabbit non-inline comments** (outside diff, duplicate, nitpick) are not posted
+as inline review comments. They are embedded in the PR-level review body
+(`pulls/$PR/reviews`) inside structured `<details>` blocks. Each section type
+has its own block with file paths, line ranges, severity, and optional AI prompts.
+
+See `coderabbit_parsing.md` for the full body structure and parsing guide.
+
+**Duplicate comments** from CodeRabbit indicate an issue was already flagged in a
+previous review and not fixed. Treat these as higher actual priority than their
+severity label suggests.
 
 ### Cursor Comments
 ```
