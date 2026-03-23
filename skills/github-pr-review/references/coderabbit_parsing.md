@@ -55,7 +55,7 @@ REPO=$(gh repo view --json nameWithOwner -q '.nameWithOwner')
 PR=$(gh pr view --json number -q '.number')
 
 # Get all CodeRabbit review bodies (may be multiple reviews across pushes)
-gh api repos/$REPO/pulls/$PR/reviews --jq '
+gh api repos/$REPO/pulls/$PR/reviews?per_page=100 --jq '
   [.[] | select(.user.login | startswith("coderabbitai")) |
    {id, submitted_at, body}]
 '
@@ -166,7 +166,7 @@ CodeRabbit posts comments in two ways:
 CodeRabbit's "actionable comments" are posted as part of a review object. The general `pulls/$PR/comments` endpoint may not surface these comments, or may surface them with a delay. When the review body states "Actionable comments posted: N" but the general endpoint returns fewer than N new originals from CodeRabbit, fetch the missing comments via the review-specific endpoint:
 
 ```bash
-gh api repos/$REPO/pulls/$PR/reviews/$REVIEW_ID/comments --jq '
+gh api repos/$REPO/pulls/$PR/reviews/$REVIEW_ID/comments?per_page=100 --jq '
   [.[] | select(.in_reply_to_id == null) |
    {id, path, user: .user.login, created_at, body: .body[0:200]}]
 '
