@@ -157,8 +157,22 @@ CodeRabbit posts comments in two ways:
 |------|-------------|-----------|
 | Inline review comments | `pulls/$PR/comments` | Comments on lines within the PR diff |
 | Review body sections | `pulls/$PR/reviews` | Outside diff, duplicate, nitpick comments |
+| Review-attached inline comments | `pulls/$PR/reviews/$REVIEW_ID/comments` | Fallback for inline comments not yet surfaced by the general endpoint |
 
 **ALWAYS** fetch both endpoints to get the complete picture. Inline comments may reference issues also mentioned in the review body (especially duplicates).
+
+### Review-attached comment gap
+
+CodeRabbit's "actionable comments" are posted as part of a review object. The general `pulls/$PR/comments` endpoint may not surface these comments, or may surface them with a delay. When the review body states "Actionable comments posted: N" but the general endpoint returns fewer than N new originals from CodeRabbit, fetch the missing comments via the review-specific endpoint:
+
+```bash
+gh api repos/$REPO/pulls/$PR/reviews/$REVIEW_ID/comments --jq '
+  [.[] | select(.in_reply_to_id == null) |
+   {id, path, user: .user.login, created_at, body: .body[0:200]}]
+'
+```
+
+Deduplicate by `id` against the general endpoint results. Comments found only via this endpoint are standard inline comments and support the same `in_reply_to` reply mechanism.
 
 ## "Also applies to" handling
 

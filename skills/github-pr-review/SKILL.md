@@ -33,6 +33,18 @@ gh api repos/$REPO/pulls/$PR/reviews --jq '
 '
 ```
 
+**Cross-check review-attached comments**: CodeRabbit's review body states "Actionable comments posted: N". If the general `pulls/$PR/comments` endpoint returns fewer than N new originals from that reviewer, some comments are only available via the review-specific endpoint. Fetch them and merge by comment ID:
+
+```bash
+# $REVIEW_ID from the reviews fetch above; $EXPECTED from parsing "Actionable comments posted: N"
+gh api repos/$REPO/pulls/$PR/reviews/$REVIEW_ID/comments --jq '
+  [.[] | select(.in_reply_to_id == null) |
+   {id, path, user: .user.login, created_at, body: .body[0:200]}]
+'
+```
+
+Deduplicate by `id` before continuing. Comments found only via the review-specific endpoint are valid inline comments and should be treated identically (same classification, same `in_reply_to` reply mechanism).
+
 **Filter new vs already-seen**: compare `created_at`/`submitted_at` with `$LAST_PUSH`. Comments posted after the last push are new. Mark older comments as "previous round" in the summary table.
 
 **Parse CodeRabbit review bodies**: the initial fetch truncates bodies for classification. For reviews from CodeRabbit (`user.login` starts with `coderabbitai`), fetch the full body separately:
@@ -177,6 +189,7 @@ When bots (Gemini, Codex, etc.) review every push:
 ## Important rules
 
 - **ALWAYS** fetch both inline comments (`pulls/$PR/comments`) and review bodies (`pulls/$PR/reviews`)
+- **ALWAYS** cross-check "Actionable comments posted: N" against found originals; fetch `pulls/$PR/reviews/$REVIEW_ID/comments` when count mismatches
 - **ALWAYS** parse CodeRabbit review bodies for all section types (outside diff, duplicate, minor, nitpick)
 - **ALWAYS** use CodeRabbit "Prompt for AI Agents" as primary context when available
 - **ALWAYS** show the review summary table before processing
