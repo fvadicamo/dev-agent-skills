@@ -4,27 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A collection of Claude Code agent skills for development workflows, distributed as a plugin marketplace. Contains 5 skills organized into 2 plugins:
+A collection of Claude Code agent skills and hooks for development workflows, distributed as a plugin marketplace. Contains 5 skills and 1 hook organized into 3 plugins:
 
 - **github-workflow** plugin: `git-commit`, `github-pr-creation`, `github-pr-merge`, `github-pr-review`
 - **skill-authoring** plugin: `creating-skills`
+- **guardrails** plugin: `guard-destructive` PreToolUse hook
 
-Skills are model-invoked (Claude activates them based on user intent, not slash commands).
+Skills are model-invoked (Claude activates them based on user intent, not slash commands). The hook runs automatically on every Bash tool call.
 
 ## Architecture
 
 ```
 .claude-plugin/
-  marketplace.json        # Plugin registry: defines plugins, skill paths, metadata
+  marketplace.json        # Marketplace registry: lists all plugins
 skills/
-  <skill-name>/
+  <skill-name>/           # Skills for the github-workflow / skill-authoring plugins
     SKILL.md              # Main skill file (YAML frontmatter + markdown body)
     references/           # Optional deep-dive docs loaded on demand
+guardrails/               # The guardrails plugin - its own directory
+  .claude-plugin/
+    plugin.json           # Plugin manifest
+  hooks/
+    hooks.json            # Hook registration (PreToolUse, matcher Bash)
+    guard-destructive.sh  # The guard script, run via ${CLAUDE_PLUGIN_ROOT}
 ```
 
 ### Key file: `marketplace.json`
 
-Defines the plugin structure. Each plugin has a `skills` array pointing to skill directories. When adding or removing skills, update both the plugin's `skills` array and the corresponding directory.
+Defines the plugins. `github-workflow` and `skill-authoring` share `source: "./"` (the repo root) and list their skill directories in explicit `skills` arrays. The `guardrails` plugin instead lives in its own directory (`source: "./guardrails"`) with its own `.claude-plugin/plugin.json` manifest; its components (`hooks/hooks.json`) are auto-discovered from that directory - the standard plugin layout. New components for the guardrails plugin (e.g. skills) go inside `guardrails/`.
 
 ### Skill anatomy
 

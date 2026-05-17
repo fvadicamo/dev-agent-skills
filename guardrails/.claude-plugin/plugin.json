@@ -1,0 +1,9 @@
+{
+  "name": "guardrails",
+  "description": "Safety guardrails for running Claude Code with reduced supervision. Ships the guard-destructive PreToolUse hook: hard-blocks catastrophic Bash commands (rm -rf /, rsync --delete, docker volume rm) and prompts for confirmation on other destructive operations (rm, rmdir, git reset --hard, shred, dd, mkfs). Exempts rm whose operands all sit under a temp directory.",
+  "version": "1.3.0",
+  "author": {
+    "name": "Francesco Vadicamo",
+    "email": "fvadicamo@gmail.com"
+  }
+}

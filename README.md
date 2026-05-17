@@ -1,6 +1,6 @@
 # dev-agent-skills
 
-Agent skills for development workflows - Git, GitHub, and skill authoring.
+Agent skills and hooks for development workflows - Git, GitHub, skill authoring, and safety guardrails.
 
 These skills are designed for [Claude Code](https://claude.com/claude-code), the CLI tool by Anthropic.
 
@@ -30,6 +30,7 @@ There are no official Anthropic skills for Git/GitHub workflows. This plugin fil
 # Install plugins
 /plugin install github-workflow@dev-agent-skills
 /plugin install skill-authoring@dev-agent-skills
+/plugin install guardrails@dev-agent-skills
 ```
 
 ## How skills work
@@ -148,6 +149,24 @@ This skill complements the official [skill-creator](https://github.com/anthropic
 | Output patterns reference | No | Yes |
 
 **In short**: this skill is a practical, up-to-date reference for all available features. The official skill is a conceptual guide with scaffolding/packaging tools. Install both for the most complete experience.
+
+## Plugin: guardrails
+
+Safety guardrails for running Claude Code with reduced supervision (for example under `--dangerously-skip-permissions`). It currently ships one `PreToolUse` hook; more checks may follow. Unlike the skills, the hook is not model-invoked: it runs automatically on every Bash tool call, before the command executes.
+
+### guard-destructive
+
+**What it adds over Claude's default behavior:**
+
+| Without this hook | With this hook |
+|-------------------|----------------|
+| Catastrophic commands run if permissions allow | Hard-blocks `rm -rf /` (and `~`/`$HOME`), `rsync --delete`, `docker rm -v` / `docker volume rm` |
+| `rm` runs without a second look | Prompts for confirmation and enumerates the resolved operands so you see what would be deleted |
+| Temp-file cleanup triggers the same prompt | `rm` whose operands all sit strictly under a temp dir (`/tmp`, `/private/tmp`, `/var/tmp`, `/var/folders`) is exempted |
+| Destructive commands hidden in `ssh '...'` slip through | Catches commands wrapped in `ssh '...'` / `sh -c "..."` |
+| `git reset --hard`, `dd`, `mkfs`, `shred` run unguarded | Prompts for confirmation before each |
+
+The hook is harness-only - it adds no token cost to the model context.
 
 ## License
 
