@@ -6,34 +6,25 @@
   },
   "metadata": {
     "description": "Agent skills and hooks for development workflows - Git, GitHub, skill authoring, and safety guardrails",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "plugins": [
     {
       "name": "github-workflow",
       "description": "Git commit, PR creation, review, and merge skills following Conventional Commits",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/git-commit",
-        "./skills/github-pr-creation",
-        "./skills/github-pr-merge",
-        "./skills/github-pr-review"
-      ]
+      "source": "./plugins/github-workflow",
+      "strict": false
     },
     {
       "name": "skill-authoring",
       "description": "Guide for creating Claude Code skills following Anthropic's best practices",
-      "source": "./",
-      "strict": false,
-      "skills": [
-        "./skills/creating-skills"
-      ]
+      "source": "./plugins/skill-authoring",
+      "strict": false
     },
     {
       "name": "guardrails",
       "description": "Safety guardrails for running Claude Code with reduced supervision. Ships the guard-destructive PreToolUse hook: hard-blocks catastrophic Bash commands (rm -rf /, rsync --delete, docker volume rm) and prompts for confirmation on other destructive operations (rm, rmdir, git reset --hard, shred, dd, mkfs). Exempts rm whose operands all sit under a temp directory.",
-      "source": "./guardrails",
+      "source": "./plugins/guardrails",
       "strict": false
     }
   ]

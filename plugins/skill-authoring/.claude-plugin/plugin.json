@@ -1,0 +1,9 @@
+{
+  "name": "skill-authoring",
+  "description": "Guide for creating Claude Code skills following Anthropic's best practices",
+  "version": "1.4.0",
+  "author": {
+    "name": "Francesco Vadicamo",
+    "email": "fvadicamo@gmail.com"
+  }
+}
