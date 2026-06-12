@@ -3,6 +3,18 @@
 #   Catastrophic patterns      -> exit 2 (hard block, stderr fed back to Claude).
 #   Other destructive patterns -> permissionDecision "ask" (force a confirmation).
 #
+# COMMAND-vs-DATA: pattern matching runs on a normalized view of the command, not
+# the raw string, so a command that merely *mentions* a destructive pattern (in a
+# heredoc body, a commit message, an echo/grep argument, a comment) is NOT flagged.
+# Normalization (see strip_heredocs + transform):
+#   - heredoc bodies are removed (they are data, never executed);
+#   - comments are removed (quote-aware, so `#` inside a string is preserved);
+#   - quoted strings are NEUTRALIZED, EXCEPT a quoted string that is the argument
+#     of an interpreter (ssh, sh -c / bash -c / zsh -c, eval), whose content is
+#     EXPOSED because it is a real (possibly remote) command.
+# So `git commit -m "...rm -rf..."` is inert, while `ssh host 'rm -rf /data'` and
+# `sh -c "rsync -a --delete ..."` are still caught.
+#
 # rm / rmdir are SCOPE-AWARE: an operation whose operands ALL resolve strictly
 # inside the allowed workspace runs SILENTLY (no prompt). The allowed workspace is
 #   - the Claude session project root ($CLAUDE_PROJECT_DIR, else the cwd), unless
@@ -12,23 +24,88 @@
 #     e.g. "/mnt/scratch:/mnt/ai/tmp" on Kalypso).
 # Anything OUTSIDE that space, or any operand the hook cannot resolve before
 # execution (a glob like *.o, a variable like $BUILD, a ~ path), is treated as
-# OUTSIDE -> a single confirmation prompt is raised, carrying the reflective
-# question. The danger is deleting user data outside the work area, not build
-# artifacts inside it.
-#
-# The "preceding char" class includes quotes, so destructive commands wrapped
-# in ssh '...' / sh -c "..." are caught too.
+# OUTSIDE -> a single confirmation prompt carrying the reflective question.
 
 input=$(cat)
-cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
-[[ -z "$cmd" ]] && exit 0
+cmd_raw=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
+[[ -z "$cmd_raw" ]] && exit 0
 
 cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
 [[ -n "$cwd" && -d "$cwd" ]] && cd "$cwd" 2>/dev/null
 
-# Token boundary that may precede a command word: line start, separators,
-# whitespace, or an opening quote (covers `ssh host 'rm ...'`).
-pre="(^|[;&|('\"]|[[:space:]])"
+# --- Normalization ---------------------------------------------------------
+
+# Drop heredoc bodies: keep the command line carrying `<<DELIM`, remove the body
+# lines and the closing delimiter line. Here-strings (<<<) and `<<N` arithmetic
+# are not heredocs and are left intact.
+strip_heredocs() {
+  awk '
+  {
+    line=$0
+    if (innh) { t=line; if (dash) sub(/^\t+/,"",t); if (t==delim) innh=0; next }
+    if (match(line, /<<-?[ \t]*[^ \t]+/)) {
+      third=substr(line,RSTART+2,1)
+      if (third!="<") {
+        dash=(third=="-")?1:0
+        d=substr(line,RSTART,RLENGTH); sub(/<<-?[ \t]*/,"",d); gsub(/[^A-Za-z0-9_]/,"",d)
+        if (d ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { delim=d; innh=1 }
+      }
+      print line; next
+    }
+    print line
+  }'
+}
+
+# mode=clean -> strip comments, keep quoted CONTENT (so rm operands survive).
+# mode=scan  -> strip comments, NEUTRALIZE non-interpreter quotes, EXPOSE
+#               interpreter-quoted content. Used for all pattern detection.
+transform() {
+  awk -v mode="$1" '
+  BEGIN{ SQ=sprintf("%c",39); DQ=sprintf("%c",34) }
+  { buf=buf $0 "\n" }
+  END{
+    n=length(buf); out=""; word=""; prev=""; pending=0; state=0; q=""; pc=""
+    for(i=1;i<=n;i++){
+      c=substr(buf,i,1)
+      if(state==3){ if(c=="\n"){state=0; out=out c; pc="\n"} continue }
+      if(state==0){
+        if(c==SQ){ flush(); state=1; q=""; continue }
+        if(c==DQ){ flush(); state=2; q=""; continue }
+        if(c=="#" && (pc==""||pc==" "||pc=="\t"||pc=="\n"||pc==";"||pc=="|"||pc=="&"||pc=="("||pc=="{")){ flush(); state=3; continue }
+        if(c==";"||c=="|"||c=="&"||c=="\n"||c=="("||c==")"||c=="{"||c=="}"||c=="`"){ flush(); out=out c; pending=0; prev=""; pc=c; continue }
+        if(c==" "||c=="\t"){ flush(); out=out c; pc=c; continue }
+        word=word c; pc=c; continue
+      }
+      if(state==1){ if(c==SQ){ closeq(); state=0; pc=SQ } else q=q c; continue }
+      if(state==2){ if(c==DQ){ closeq(); state=0; pc=DQ } else q=q c; continue }
+    }
+    flush()
+    printf "%s", out
+  }
+  function flush(){
+    if(word!=""){
+      out=out word
+      if(word=="ssh"||word=="eval") pending=1
+      else if(word ~ /^-[A-Za-z]*c$/ && prev ~ /(^|\/)[a-z]*sh$/) pending=1
+      prev=word; word=""
+    }
+  }
+  function closeq(){
+    if(mode=="clean") out=out q
+    else { if(pending) out=out q; else out=out " " }
+    pending=0; prev=""
+  }'
+}
+
+cmd_clean=$(printf '%s' "$cmd_raw" | strip_heredocs | transform clean)
+scan=$(printf '%s' "$cmd_raw" | strip_heredocs | transform scan)
+# Fail safe: if normalization yields nothing, fall back to the raw command
+# (better to over-prompt than to miss a destructive command).
+[[ -z "${scan//[[:space:]]/}" ]] && scan="$cmd_raw"
+[[ -z "${cmd_clean//[[:space:]]/}" ]] && cmd_clean="$cmd_raw"
+
+# Token boundary that may precede a command word.
+pre="(^|[;&|(]|[[:space:]])"
 
 block() {
   echo "BLOCKED by guard-destructive: $1" >&2
@@ -42,25 +119,23 @@ ask() {
   exit 0
 }
 
-# --- Catastrophic: hard block (unchanged) ---
-echo "$cmd" | grep -qE 'rsync([[:space:]]|$)([^|;&]*--delete)' && \
+# --- Catastrophic: hard block ---
+echo "$scan" | grep -qE 'rsync([[:space:]]|$)([^|;&]*--delete)' && \
   block "rsync with --delete*: risk of unintended remote deletions."
 
-echo "$cmd" | grep -qE '(docker[[:space:]]+(container[[:space:]]+)?rm[^|;&]*-[^[:space:]]*v|docker[[:space:]]+volume[[:space:]]+rm)' && \
+echo "$scan" | grep -qE '(docker[[:space:]]+(container[[:space:]]+)?rm[^|;&]*-[^[:space:]]*v|docker[[:space:]]+volume[[:space:]]+rm)' && \
   block "docker rm with -v or docker volume rm: risk of losing persistent volumes."
 
-echo "$cmd" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+(/|~|\$HOME)([[:space:]]|$)' && \
+echo "$scan" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+(/|~|\$HOME)([[:space:]]|$)' && \
   block "recursive rm on the root / or the home directory."
 
 # --- Allowed-workspace resolution (used by rm / rmdir) ---
 
-# Session project root; ignored if it is too broad to trust as a blanket allow.
 project_root="${CLAUDE_PROJECT_DIR:-$cwd}"
 case "$project_root" in
   ""|"/"|"$HOME") project_root="__none__" ;;
 esac
 
-# Absolute path WITHOUT requiring the target to exist (it is about to be deleted).
 abspath() {
   case "$1" in
     /*) printf '%s' "$1" ;;
@@ -68,8 +143,6 @@ abspath() {
   esac
 }
 
-# True only for an operand we can resolve AND that sits strictly under an allowed
-# root. Globs / variables / ~ / traversal are unresolvable pre-exec -> NOT allowed.
 is_allowed_operand() {
   case "$1" in
     *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*) return 1 ;;  # glob / var / home: cannot resolve
@@ -87,11 +160,10 @@ is_allowed_operand() {
   return 1
 }
 
-# Enumerate rm/rmdir operands; list each with where it lands so the user (on the
-# rare out-of-scope prompt) sees exactly what is at stake.
+# Detection runs on $scan; operands are enumerated from $cmd_clean (real paths).
 scoped_check() {
   local verb=$1 seg listing="" operands=0 outside=0 tok p
-  seg=$(echo "$cmd" | grep -oE "${verb}[[:space:]][^;&|]*" | head -1)
+  seg=$(echo "$cmd_clean" | grep -oE "${verb}[[:space:]][^;&|]*" | head -1)
   for tok in ${seg#${verb} }; do
     [[ "$tok" == -* ]] && continue
     p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
@@ -115,25 +187,24 @@ scoped_check() {
       fi
     fi
   done
-  # All operands inside the allowed workspace: run silently.
   [[ "$operands" -gt 0 && "$outside" -eq 0 ]] && exit 0
   local msg="'$verb' touches paths OUTSIDE the allowed workspace. Before you confirm, re-check: is this deletion part of the process you were following and expected? Could it destroy pre-existing user data, or anything outside the work area? Re-verify the targets and parameters."
   [[ -n "$listing" ]] && msg+=$'\n'"Targets resolved now:$listing"
   ask "$msg"
 }
 
-echo "$cmd" | grep -qE "${pre}rm([[:space:]]|\$)"    && scoped_check rm
-echo "$cmd" | grep -qE "${pre}rmdir([[:space:]]|\$)" && scoped_check rmdir
+echo "$scan" | grep -qE "${pre}rm([[:space:]]|\$)"    && scoped_check rm
+echo "$scan" | grep -qE "${pre}rmdir([[:space:]]|\$)" && scoped_check rmdir
 
 # --- Destructive on non-file state / rare: still force a confirmation ---
 
-echo "$cmd" | grep -qE 'git[[:space:]]+(reset[[:space:]]+--(hard|keep)|clean[[:space:]]+-[a-zA-Z]*[fdx]|checkout[[:space:]]+--[[:space:]]|restore([[:space:]]|$))' && \
+echo "$scan" | grep -qE 'git[[:space:]]+(reset[[:space:]]+--(hard|keep)|clean[[:space:]]+-[a-zA-Z]*[fdx]|checkout[[:space:]]+--[[:space:]]|restore([[:space:]]|$))' && \
   ask "Destructive git command for the working tree (reset --hard / clean -f / checkout -- / restore): uncommitted changes would be lost. Confirm before proceeding."
 
-echo "$cmd" | grep -qE "${pre}(shred|truncate|mkfs[.a-zA-Z]*)([[:space:]]|\$)" && \
+echo "$scan" | grep -qE "${pre}(shred|truncate|mkfs[.a-zA-Z]*)([[:space:]]|\$)" && \
   ask "Destructive command (shred/truncate/mkfs) detected. Confirm before proceeding."
 
-echo "$cmd" | grep -qE "${pre}dd[[:space:]]" && \
+echo "$scan" | grep -qE "${pre}dd[[:space:]]" && \
   ask "'dd' command detected. Check of= and parameters before proceeding."
 
 exit 0
