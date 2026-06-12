@@ -7,24 +7,24 @@
 # the raw string, so a command that merely *mentions* a destructive pattern (in a
 # heredoc body, a commit message, an echo/grep argument, a comment) is NOT flagged.
 # Normalization (see strip_heredocs + transform):
-#   - heredoc bodies are removed (they are data, never executed);
+#   - heredoc bodies are removed (data, never executed); a `<<` sitting inside an
+#     open quote is NOT treated as a heredoc;
 #   - comments are removed (quote-aware, so `#` inside a string is preserved);
 #   - quoted strings are NEUTRALIZED, EXCEPT a quoted string that is the argument
-#     of an interpreter (ssh, sh -c / bash -c / zsh -c, eval), whose content is
-#     EXPOSED because it is a real (possibly remote) command.
-# So `git commit -m "...rm -rf..."` is inert, while `ssh host 'rm -rf /data'` and
-# `sh -c "rsync -a --delete ..."` are still caught.
+#     of an interpreter (ssh / sh -c / bash -c / zsh -c / eval / su / doas /
+#     runuser / $VAR -c), whose content is EXPOSED because it is a real command.
+# So `git commit -m "...rm -rf..."` is inert, while `ssh host 'rm -rf /data'`,
+# `sh -c "rsync --delete ..."` and `su -c 'rm -rf /'` are still caught.
 #
 # rm / rmdir are SCOPE-AWARE: an operation whose operands ALL resolve strictly
 # inside the allowed workspace runs SILENTLY (no prompt). The allowed workspace is
 #   - the Claude session project root ($CLAUDE_PROJECT_DIR, else the cwd), unless
-#     that root is "/" or $HOME (too broad to trust as a blanket allow),
+#     that root is "/", $HOME, or a shallow top-level dir (too broad to trust),
 #   - the temp dirs (/tmp, /private/tmp, /var/tmp, /var/folders),
-#   - any colon-separated extra roots in $GUARD_ALLOWED_EXTRA (per-node scratch,
-#     e.g. "/mnt/scratch:/mnt/ai/tmp" on Kalypso).
+#   - any colon-separated extra roots in $GUARD_ALLOWED_EXTRA (per-node scratch).
 # Anything OUTSIDE that space, or any operand the hook cannot resolve before
-# execution (a glob like *.o, a variable like $BUILD, a ~ path), is treated as
-# OUTSIDE -> a single confirmation prompt carrying the reflective question.
+# execution (glob *.o, variable $BUILD, ~ path, backslash escape, {} placeholder),
+# is treated as OUTSIDE -> a single confirmation carrying the reflective question.
 
 input=$(cat)
 cmd_raw=$(printf '%s' "$input" | jq -r '.tool_input.command // empty')
@@ -35,17 +35,19 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
 
 # --- Normalization ---------------------------------------------------------
 
-# Drop heredoc bodies: keep the command line carrying `<<DELIM`, remove the body
-# lines and the closing delimiter line. Here-strings (<<<) and `<<N` arithmetic
-# are not heredocs and are left intact.
+# Drop heredoc bodies. A `<<DELIM` is only a heredoc when it is NOT inside an open
+# quote (balanced quotes before it). Here-strings (<<<) and `<<N` are not heredocs.
 strip_heredocs() {
   awk '
+  BEGIN{ SQ=sprintf("%c",39); DQ=sprintf("%c",34) }
   {
     line=$0
     if (innh) { t=line; if (dash) sub(/^\t+/,"",t); if (t==delim) innh=0; next }
     if (match(line, /<<-?[ \t]*[^ \t]+/)) {
+      p=substr(line,1,RSTART-1); nd=gsub(DQ,"\\&",p)
+      p=substr(line,1,RSTART-1); ns=gsub(SQ,"\\&",p)
       third=substr(line,RSTART+2,1)
-      if (third!="<") {
+      if (third!="<" && nd%2==0 && ns%2==0) {
         dash=(third=="-")?1:0
         d=substr(line,RSTART,RLENGTH); sub(/<<-?[ \t]*/,"",d); gsub(/[^A-Za-z0-9_]/,"",d)
         if (d ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { delim=d; innh=1 }
@@ -85,8 +87,8 @@ transform() {
   function flush(){
     if(word!=""){
       out=out word
-      if(word=="ssh"||word=="eval") pending=1
-      else if(word ~ /^-[A-Za-z]*c$/ && prev ~ /(^|\/)[a-z]*sh$/) pending=1
+      if(word=="ssh"||word=="eval"||word=="su"||word=="doas"||word=="runuser") pending=1
+      else if(word ~ /^-[A-Za-z]*c$/ && (prev ~ /(^|\/)[a-z]*sh$/ || prev ~ /^\$/)) pending=1
       prev=word; word=""
     }
   }
@@ -99,12 +101,10 @@ transform() {
 
 cmd_clean=$(printf '%s' "$cmd_raw" | strip_heredocs | transform clean)
 scan=$(printf '%s' "$cmd_raw" | strip_heredocs | transform scan)
-# Fail safe: if normalization yields nothing, fall back to the raw command
-# (better to over-prompt than to miss a destructive command).
+# Fail safe: if normalization yields nothing, fall back to the raw command.
 [[ -z "${scan//[[:space:]]/}" ]] && scan="$cmd_raw"
 [[ -z "${cmd_clean//[[:space:]]/}" ]] && cmd_clean="$cmd_raw"
 
-# Token boundary that may precede a command word.
 pre="(^|[;&|(]|[[:space:]])"
 
 block() {
@@ -126,7 +126,7 @@ echo "$scan" | grep -qE 'rsync([[:space:]]|$)([^|;&]*--delete)' && \
 echo "$scan" | grep -qE '(docker[[:space:]]+(container[[:space:]]+)?rm[^|;&]*-[^[:space:]]*v|docker[[:space:]]+volume[[:space:]]+rm)' && \
   block "docker rm with -v or docker volume rm: risk of losing persistent volumes."
 
-echo "$scan" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+(/|~|\$HOME)([[:space:]]|$)' && \
+echo "$scan" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+\\?(/|~|\$HOME)([[:space:]]|$)' && \
   block "recursive rm on the root / or the home directory."
 
 # --- Allowed-workspace resolution (used by rm / rmdir) ---
@@ -134,6 +134,12 @@ echo "$scan" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+(/|~|\
 project_root="${CLAUDE_PROJECT_DIR:-$cwd}"
 case "$project_root" in
   ""|"/"|"$HOME") project_root="__none__" ;;
+esac
+# A trustworthy project root is not a shallow top-level dir (/Users, /mnt, /opt...).
+case "$project_root" in
+  __none__) : ;;
+  */*/*) : ;;
+  *) project_root="__none__" ;;
 esac
 
 abspath() {
@@ -145,8 +151,8 @@ abspath() {
 
 is_allowed_operand() {
   case "$1" in
-    *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*) return 1 ;;  # glob / var / home: cannot resolve
-    *..*) return 1 ;;                                  # traversal
+    *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;  # glob/var/home/escape/placeholder
+    *..*) return 1 ;;                                              # traversal
   esac
   local ap; ap=$(abspath "$1")
   case "$ap" in
@@ -183,7 +189,7 @@ scoped_check() {
       elif [[ -e "$p" ]]; then
         listing+=$'\n'"  [OUTSIDE]       $p"
       else
-        listing+=$'\n'"  [UNRESOLVED]    $tok  (glob/var/missing: treated as outside)"
+        listing+=$'\n'"  [UNRESOLVED]    $tok  (glob/var/escape/missing: treated as outside)"
       fi
     fi
   done
