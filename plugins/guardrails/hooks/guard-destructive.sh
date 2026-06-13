@@ -123,6 +123,9 @@ collect_temp_vars() {
     [[ "$args" =~ ^[[:space:]]*(-[dqu]+[[:space:]]*)*$ ]] || continue
     cnt=$(printf '%s' "$cmd_clean" | grep -oE "(^|[^A-Za-z0-9_])${name}=" | wc -l | tr -d ' ')
     [[ "$cnt" == "1" ]] || continue
+    # Rebound elsewhere (for/read/select/mapfile reference the var as a bareword,
+    # not $VAR or NAME=) -> its value at rm-time is unknown; don't trust it.
+    printf '%s' "$cmd_clean" | grep -qE "(^|[^A-Za-z0-9_\$\{])${name}([^A-Za-z0-9_=]|\$)" && continue
     case "$out" in *":$name:"*) : ;; *) out="${out}${name}:" ;; esac
   done <<< "$caps"
   printf '%s' "$out"
@@ -175,6 +178,7 @@ abspath() {
 
 is_allowed_operand() {
   local vn
+  case "$1" in *..*) return 1 ;; esac                             # traversal (even on a temp var)
   # Operand rooted at a variable provably holding a fresh mktemp path -> temp.
   case "$1" in
     '$'*)
@@ -184,7 +188,6 @@ is_allowed_operand() {
   esac
   case "$1" in
     *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;  # glob/var/home/escape/placeholder
-    *..*) return 1 ;;                                              # traversal
   esac
   local ap; ap=$(abspath "$1")
   case "$ap" in

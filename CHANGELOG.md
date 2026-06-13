@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-06-13
+
+### Fixed
+
+#### guardrails plugin
+Closed two false negatives in the 1.6.2 mktemp-variable recognition, found by adversarial review (a deletion that should prompt could run silently):
+- A mktemp-backed variable rebound by a loop or read (`D=$(mktemp -d); for D in /etc; do rm -rf "$D"; done`, or `read D < ...`) is no longer trusted: a variable referenced anywhere as a bareword (any rebinding form, not `$VAR` and not `NAME=`) is dropped from the temp set.
+- Path traversal out of a temp variable (`rm -rf "$D/../../etc"`) now prompts: the `..` reject runs before the temp-variable allow.
+
 ## [1.6.2] - 2026-06-13
 
 ### Changed
