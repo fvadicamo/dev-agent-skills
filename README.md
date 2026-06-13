@@ -168,6 +168,27 @@ Safety guardrails for running Claude Code with reduced supervision (for example 
 
 The hook is harness-only - it adds no token cost to the model context.
 
+## Development
+
+The `guardrails` hook ships with a regression suite. After cloning the repo to work
+on the hook, enable the shared git hooks (they live in the versioned `.githooks/`,
+not in `.git/hooks/`):
+
+```sh
+git config core.hooksPath .githooks      # one-time, per clone
+```
+
+With that set, a pre-commit hook runs the suite whenever the hook or its tests are
+staged and blocks the commit on a regression (bypass once with `git commit --no-verify`).
+You can also run it by hand at any time:
+
+```sh
+bash plugins/guardrails/tests/run.sh
+```
+
+See `plugins/guardrails/tests/README.md` for the case format and `CLAUDE.md` for
+contributor guidance.
+
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
