@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-commit: run the guard-destructive regression suite when the guardrails hook
+# or its tests are staged. A guardrail must never ship a regression.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Bypass once:             git commit --no-verify
+set -uo pipefail
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+staged="$(git diff --cached --name-only)"
+printf '%s\n' "$staged" | grep -qE '^plugins/guardrails/(hooks|tests)/' || exit 0
+
+runner="$root/plugins/guardrails/tests/run.sh"
+[[ -f "$runner" ]] || { echo "pre-commit: $runner missing, skipping" >&2; exit 0; }
+
+echo "pre-commit: guardrails hook/tests changed - running regression suite..."
+out="$(cd "$root" && bash "$runner" 2>&1)"; rc=$?
+
+case $rc in
+  0)
+    printf '%s\n' "$out" | tail -1
+    ;;
+  2)
+    printf '%s\n' "$out" >&2
+    echo "pre-commit: could not run the suite (environment) - allowing commit; re-run it manually." >&2
+    rc=0
+    ;;
+  *)
+    printf '%s\n' "$out" >&2
+    echo "pre-commit: guardrails tests FAILED - commit blocked. Override with 'git commit --no-verify'." >&2
+    ;;
+esac
+exit $rc

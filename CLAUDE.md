@@ -69,6 +69,16 @@ new behavior and its failure modes: for a guardrail the dangerous direction is a
 false negative (something destructive running silently), so favour adversarial
 cases asserted as `ASK`/`BLOCK`. See `plugins/guardrails/tests/README.md`.
 
+A pre-commit hook (`.githooks/pre-commit`) runs the suite automatically when the
+guardrails hook or its tests are staged, and blocks the commit on failure. Enable
+it once per clone (it lives in a versioned, shared dir, not `.git/hooks/`):
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Bypass a single commit with `git commit --no-verify`.
+
 ## Writing skills
 
 When creating or editing skills, follow the patterns in `plugins/skill-authoring/skills/creating-skills/SKILL.md`:
