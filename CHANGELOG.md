@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.5] - 2026-06-13
+
+### Changed
+
+#### github-workflow plugin
+- `github-pr-merge` gained a pre-merge changelog-completeness check: it lists the commits the merge will publish (`base..head`) and verifies every behavior-changing one is reflected in the CHANGELOG, stopping if any are unlogged. Guards release-promotion merges (`develop` → `main`) against leaving commits out of the changelog.
+
 ## [1.6.4] - 2026-06-13
 
 ### Added

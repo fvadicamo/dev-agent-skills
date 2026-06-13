@@ -39,7 +39,7 @@ gh api repos/$REPO/pulls/$PR/comments --jq '
 gh pr view $PR --json milestone -q '.milestone.title // "none"'
 ```
 
-- If milestone is assigned: include it in the checklist summary (step 3)
+- If milestone is assigned: include it in the checklist summary (step 5)
 - If no milestone: check for open milestones and warn the user
 
 ```bash
@@ -59,7 +59,24 @@ Run tests, linting, and verify CI checks. All **MUST** pass before proceeding.
 gh pr checks $PR
 ```
 
-### 4. Confirm with user
+### 4. Verify changelog completeness
+
+Skip if the repo has no `CHANGELOG.md`. Otherwise make sure every commit this merge will publish is reflected in the changelog, so a release-promotion merge (`develop` → `main`) never leaves commits unlogged.
+
+List the commits this PR brings into the base, and the changelog lines it adds:
+
+```bash
+BASE=$(gh pr view $PR --json baseRefName -q .baseRefName)
+HEAD=$(gh pr view $PR --json headRefName -q .headRefName)
+git log --oneline origin/$BASE..origin/$HEAD
+git diff origin/$BASE...origin/$HEAD -- CHANGELOG.md
+```
+
+- Every commit that changes shipped behavior (`feat`/`fix`/`perf`, behavior-affecting `refactor`) **MUST** have a matching changelog line; pure `chore`/`docs`/`test` commits that do not change shipped behavior may be omitted.
+- For a release-promotion merge, also confirm the version was bumped (the top `## [x.y.z]` entry is new) and matches the manifest version(s).
+- **If any behavior-changing commit is missing from the changelog: STOP.** Report the unlogged commits and ask the user to update the changelog and version before merging. **NEVER** edit the changelog from this skill.
+
+### 5. Confirm with user
 
 **ALWAYS show checklist summary and ask before merging:**
 
@@ -70,11 +87,12 @@ Pre-merge checklist:
 - Lint: passing
 - CI: green
 - Milestone: v0.1.0 (or ⚠ not assigned)
+- Changelog: complete (or n/a)
 
 Ready to merge PR #X. Proceed?
 ```
 
-### 5. Execute merge
+### 6. Execute merge
 
 First determine the merge direction. It decides whether the head branch may be deleted:
 
@@ -104,7 +122,7 @@ For a `develop` → `main` merge, run the same command **without** `--delete-bra
 
 **Merge strategy**: always `--merge` (merge commit), never squash or rebase.
 
-### 6. Post-merge cleanup
+### 7. Post-merge cleanup
 
 Sync the branch that received the merge (the PR base), not always `develop`:
 
@@ -113,7 +131,7 @@ BASE=$(gh pr view $PR --json baseRefName -q .baseRefName)
 git checkout "$BASE" && git pull origin "$BASE"
 ```
 
-### 7. Check milestone completion
+### 8. Check milestone completion
 
 If the PR had a milestone, check whether all items are now closed:
 
@@ -158,6 +176,7 @@ Refs: Task 8, Req 14-15
 - **ALWAYS** run tests, lint, and CI checks before merging
 - **ALWAYS** verify all review comments have replies
 - **ALWAYS** check milestone assignment before merging (warn if missing, do not block)
+- **ALWAYS** (repos with a CHANGELOG) verify it accounts for every behavior-changing commit this merge publishes; STOP and report any that are missing
 - **ALWAYS** confirm with user before executing merge
 - **ALWAYS** use merge commit (`--merge`), never squash/rebase
 - **ALWAYS** delete the head branch only when merging a topic branch (`feature`/`fix`/etc.) into `develop`
