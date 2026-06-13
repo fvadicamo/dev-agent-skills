@@ -76,7 +76,18 @@ Ready to merge PR #X. Proceed?
 
 ### 5. Execute merge
 
+First determine the merge direction. It decides whether the head branch may be deleted:
+
 ```bash
+gh pr view $PR --json baseRefName,headRefName -q '"\(.headRefName) -> \(.baseRefName)"'
+```
+
+**Branch deletion rule:**
+- **Topic branch → `develop`** (head is a `feature`/`fix`/etc. branch): the branch is spent. Propose deleting it and merge with `--delete-branch`.
+- **`develop` → `main`** (or any long-lived branch as head): **NEVER** delete the head branch. `develop` and `main` are permanent. Omit `--delete-branch` and do not propose deletion.
+
+```bash
+# Add --delete-branch ONLY for a topic branch merging into develop.
 gh pr merge $PR --merge --delete-branch --body "$(cat <<'EOF'
 - Key change 1
 - Key change 2
@@ -89,9 +100,9 @@ EOF
 )"
 ```
 
-**Merge strategy**: always `--merge` (merge commit), never squash or rebase.
+For a `develop` → `main` merge, run the same command **without** `--delete-branch`.
 
-`--delete-branch` automatically deletes the remote branch after merge.
+**Merge strategy**: always `--merge` (merge commit), never squash or rebase.
 
 ### 6. Post-merge cleanup
 
@@ -146,7 +157,8 @@ Refs: Task 8, Req 14-15
 - **ALWAYS** check milestone assignment before merging (warn if missing, do not block)
 - **ALWAYS** confirm with user before executing merge
 - **ALWAYS** use merge commit (`--merge`), never squash/rebase
-- **ALWAYS** delete feature branch after successful merge
+- **ALWAYS** delete the head branch only when merging a topic branch (`feature`/`fix`/etc.) into `develop`
+- **NEVER** delete `develop` or `main`. On a `develop` → `main` merge, omit `--delete-branch` and never propose deletion
 - **ALWAYS** check milestone completion after merge and report open items count
 - **NEVER** merge with failing tests, lint, or CI checks
 - **NEVER** skip user confirmation

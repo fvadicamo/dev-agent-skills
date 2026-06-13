@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] - 2026-06-13
+
+### Changed
+
+#### github-workflow plugin
+- `github-pr-merge` is now merge-direction aware for branch deletion. It deletes the head branch (`--delete-branch`) only for a topic branch (`feature`/`fix`/etc.) merging into `develop`; on a `develop` → `main` merge it omits the flag and never proposes deleting `develop`. Previously the skill always passed `--delete-branch`, which would have deleted the long-lived `develop` branch when promoting it to `main`.
+
 ## [1.6.3] - 2026-06-13
 
 ### Fixed

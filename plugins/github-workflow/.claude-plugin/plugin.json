@@ -1,7 +1,7 @@
 {
   "name": "github-workflow",
   "description": "Git commit, PR creation, review, and merge skills following Conventional Commits",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": {
     "name": "Francesco Vadicamo",
     "email": "fvadicamo@gmail.com"
