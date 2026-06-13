@@ -1,0 +1,39 @@
+# EXPECTED ::: EXTRA(- for none) ::: COMMAND   (<NL> = newline)
+# --- DATA mentions: must NOT trigger (the bug we are fixing) ---
+SILENT ::: - ::: git commit -m "switch to rsync --delete for backups"
+SILENT ::: - ::: cat > /tmp/m <<'EOF'<NL>rsync -a --delete x y<NL>EOF
+SILENT ::: - ::: echo "rm -rf / is dangerous"
+SILENT ::: - ::: grep -c "rsync --delete" /var/log/x
+SILENT ::: - ::: echo "use docker volume rm carefully"
+SILENT ::: - ::: ls # rm -rf / just kidding
+SILENT ::: - ::: git commit -m "remove old node_modules"
+SILENT ::: - ::: git commit -m "fix: rm handling in guard"
+SILENT ::: - ::: printf 'rm -rf /' > script.sh
+SILENT ::: - ::: find . -name '*.log' -delete
+# --- Real catastrophic: must BLOCK ---
+BLOCK ::: - ::: rsync -a --delete /src/ /dst/
+BLOCK ::: - ::: ssh host 'rsync -a --delete /src /'
+BLOCK ::: - ::: sh -c "rsync --delete a b"
+BLOCK ::: - ::: bash -lc "rsync --delete a b"
+BLOCK ::: - ::: docker volume rm myvol
+BLOCK ::: - ::: docker rm -v cont
+BLOCK ::: - ::: rm -rf /
+BLOCK ::: - ::: rm -rf ~
+BLOCK ::: - ::: rm -rf $HOME
+BLOCK ::: - ::: ssh host 'rm -rf /'
+BLOCK ::: - ::: cat <<'EOF' > f<NL>echo hi<NL>EOF<NL>rm -rf /
+# --- Scope-aware rm/rmdir + rare destructive (regression from v1.5.0) ---
+SILENT ::: - ::: rm -rf nodes
+SILENT ::: - ::: rm README.md
+SILENT ::: - ::: rmdir nodes
+SILENT ::: - ::: ls -la
+SILENT ::: - ::: eval "rm -rf /tmp/junk"
+SILENT ::: /mnt/scratch ::: rm -rf /mnt/scratch/x
+ASK ::: - ::: rm /etc/hosts
+ASK ::: - ::: rm ~/Documents/x
+ASK ::: - ::: rm *.o
+ASK ::: - ::: rm -rf /mnt/scratch/x
+ASK ::: - ::: git reset --hard
+ASK ::: - ::: dd if=/dev/zero of=/tmp/x
+ASK ::: - ::: ssh host 'rm /var/www/data'
+ASK ::: - ::: eval "rm -rf /etc"

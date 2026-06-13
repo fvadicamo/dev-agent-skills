@@ -28,6 +28,9 @@ plugins/
     hooks/                  # Hooks (guardrails plugin) - auto-discovered
       hooks.json            # Hook registration
       guard-destructive.sh  # Hook script, run via ${CLAUDE_PLUGIN_ROOT}
+    tests/                  # (guardrails) regression suite - run after hook changes
+      run.sh
+      cases/*.txt
 ```
 
 ### Key file: `marketplace.json`
@@ -49,6 +52,22 @@ Reference files in `references/` provide extended examples and documentation tha
 - **Merge strategy**: always merge commits (`--merge`), never squash/rebase
 - **Changelog**: follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format
 - **Versioning**: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
+
+## Testing
+
+The `guardrails` hook is the only executable logic in this repo and ships with a
+regression suite at `plugins/guardrails/tests/`. **Run it after any change to
+`guard-destructive.sh`:**
+
+```sh
+bash plugins/guardrails/tests/run.sh
+```
+
+It exits non-zero if any case fails (usable in pre-commit / CI) and runs on both
+macOS and Linux. When you change the hook's behavior, add cases that pin both the
+new behavior and its failure modes: for a guardrail the dangerous direction is a
+false negative (something destructive running silently), so favour adversarial
+cases asserted as `ASK`/`BLOCK`. See `plugins/guardrails/tests/README.md`.
 
 ## Writing skills
 

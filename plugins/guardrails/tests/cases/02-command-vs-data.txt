@@ -1,0 +1,28 @@
+# Adversarial, expectations for v1.6.1. A FAIL = a real gap.
+# --- interpreter-wrapped: now recognized ---
+BLOCK ::: - ::: su -c 'rm -rf /'
+BLOCK ::: - ::: su fr4 -c 'rm -rf /'
+BLOCK ::: - ::: doas -c 'rm -rf /'
+BLOCK ::: - ::: runuser -u fr4 -c 'rm -rf /'
+BLOCK ::: - ::: $SHELL -c 'rm -rf /'
+BLOCK ::: - ::: timeout 5 sh -c 'rm -rf /'
+BLOCK ::: - ::: nohup bash -c 'rm -rf /'
+BLOCK ::: - ::: sudo rm -rf /
+BLOCK ::: - ::: sudo su -c 'rm -rf /'
+# --- heredoc mis-detection fixed ---
+BLOCK ::: - ::: echo "a<<b"<NL>rm -rf /
+# --- escaped root ---
+BLOCK ::: - ::: rm -rf \/
+BLOCK ::: - ::: rm -rf \~
+# --- find -exec / {} placeholder ---
+ASK ::: - ::: find /etc -name x -exec rm -rf {} ;
+ASK ::: - ::: rm -rf {}
+# --- known residuals (documented): non-shell -c, command subst in dquotes ---
+SILENT ::: - ::: python -c 'import os;os.system("x")'
+# --- sanity / no new false positives ---
+BLOCK ::: - ::: ssh host 'rm -rf /'
+SILENT ::: - ::: git commit -m "note about rm -rf and rsync --delete"
+SILENT ::: - ::: cat > /tmp/m <<'EOF'<NL>rsync -a --delete x y<NL>EOF
+SILENT ::: - ::: rm -rf node_modules/
+SILENT ::: - ::: rm a{1,2}.txt
+SILENT ::: - ::: echo "done #not a comment"

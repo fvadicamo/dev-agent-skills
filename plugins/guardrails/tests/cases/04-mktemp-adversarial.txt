@@ -1,0 +1,14 @@
+# Adversarial on the v1.6.2 temp-var path. EXPECTED = safe verdict; FAIL = hole.
+# --- rebinding a mktemp var via loop/read must NOT stay silent ---
+ASK ::: - ::: D=$(mktemp -d); for D in /etc; do rm -rf "$D"; done
+ASK ::: - ::: D=$(mktemp -d); for D in /etc /usr; do rm -rf "$D"; done
+ASK ::: - ::: D=$(mktemp -d); read D < /etc/passwd; rm -rf "$D"
+ASK ::: - ::: D=$(mktemp -d); read x D <<< "a /etc"; rm -rf "$D"
+# --- traversal out of a temp dir must NOT stay silent ---
+ASK ::: - ::: D=$(mktemp -d); rm -rf "$D/../../etc"
+ASK ::: - ::: D=$(mktemp -d); rm -rf "$D/.."
+# --- legit forms that must STAY silent (no over-correction) ---
+SILENT ::: - ::: D="$(mktemp -d)"; rm -rf "$D"
+SILENT ::: - ::: D=$(mktemp -d); for x in 1 2; do echo "$x"; done; rm -rf "$D"
+SILENT ::: - ::: for f in a b; do :; done; D=$(mktemp -d); rm -rf "$D"
+SILENT ::: - ::: D=$(mktemp -d); reader=$D; rm -rf "$D"

@@ -1,0 +1,22 @@
+# mktemp recognition (v1.6.2). EXPECTED is the desired verdict.
+# --- faithful repro of the reported command ---
+SILENT ::: - ::: PROJ=$(mktemp -d); mkdir -p "$PROJ/.s2s"<NL>cat > "$PROJ/.s2s/state.json" <<'EOF'<NL>{"active_session": null}<NL>EOF<NL>BINDIR=$(mktemp -d)<NL>printf '{"cwd":"%s"}' "$PROJ" | PATH="$BINDIR" bash ./context-reset.sh<NL>rm -rf "$PROJ" "$BINDIR"
+# --- basic mktemp idioms: now silent ---
+SILENT ::: - ::: D=$(mktemp -d); rm -rf "$D"
+SILENT ::: - ::: D=$(mktemp -d); rm -rf "$D/sub"
+SILENT ::: - ::: D=$(mktemp); rm -f "$D"
+SILENT ::: - ::: D=$(mktemp -d); rm -rf "${D}"
+SILENT ::: - ::: A=$(mktemp -d); B=$(mktemp -d); rm -rf "$A" "$B"
+SILENT ::: - ::: D=$(mktemp -d) && cd "$D" && rm -rf "$D"
+SILENT ::: - ::: D=`mktemp -d`; rm -rf "$D"
+# --- must still prompt (conservative) ---
+ASK ::: - ::: D=$(mktemp -d); rm -rf "$D" /etc/x
+ASK ::: - ::: D=$(mktemp -d); D=/etc; rm -rf "$D"
+ASK ::: - ::: D=$(mktemp -p /etc); rm -rf "$D"
+ASK ::: - ::: D=$(mktemp -d /home/x.XXXX); rm -rf "$D"
+ASK ::: - ::: rm -rf "$D"
+ASK ::: - ::: D=$TMPDIR/x; rm -rf "$D"
+ASK ::: - ::: rm -rf "$BUILD"
+ASK ::: - ::: cat <<'EOF'<NL>D=$(mktemp -d)<NL>EOF<NL>rm -rf "$D"
+# --- catastrophic must still hard-block even with a temp var present ---
+BLOCK ::: - ::: D=$(mktemp -d); rm -rf /
