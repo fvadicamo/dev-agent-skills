@@ -21,7 +21,10 @@
 #   - the Claude session project root ($CLAUDE_PROJECT_DIR, else the cwd), unless
 #     that root is "/", $HOME, or a shallow top-level dir (too broad to trust),
 #   - the temp dirs (/tmp, /private/tmp, /var/tmp, /var/folders),
-#   - any colon-separated extra roots in $GUARD_ALLOWED_EXTRA (per-node scratch).
+#   - any colon-separated extra roots in $GUARD_ALLOWED_EXTRA (per-node scratch),
+#   - a variable provably assigned from a bare `mktemp`/`mktemp -d` earlier in the
+#     SAME command (the "create temp workspace ... rm -rf it" idiom); see
+#     collect_temp_vars. Variables in general stay unresolvable -> prompt.
 # Anything OUTSIDE that space, or any operand the hook cannot resolve before
 # execution (glob *.o, variable $BUILD, ~ path, backslash escape, {} placeholder),
 # is treated as OUTSIDE -> a single confirmation carrying the reflective question.
@@ -105,6 +108,27 @@ scan=$(printf '%s' "$cmd_raw" | strip_heredocs | transform scan)
 [[ -z "${scan//[[:space:]]/}" ]] && scan="$cmd_raw"
 [[ -z "${cmd_clean//[[:space:]]/}" ]] && cmd_clean="$cmd_raw"
 
+# Variables provably assigned from a bare mktemp in this same command. Their value
+# is a fresh path under $TMPDIR, so `rm` of "$VAR" is a safe temp cleanup. Only
+# bare `mktemp`/`mktemp -d` (flags -d/-q/-u, no positional template, no -p) and
+# only single-assignment names (no reassignment) qualify. Result: ":NAME:NAME2:".
+collect_temp_vars() {
+  local caps cap name args cnt out=":"
+  caps=$(printf '%s' "$cmd_clean" | grep -oE '[A-Za-z_][A-Za-z0-9_]*=("?)(\$\(|`)mktemp[^)`]*' 2>/dev/null)
+  [[ -z "$caps" ]] && { printf '%s' "$out"; return; }
+  while IFS= read -r cap; do
+    [[ -z "$cap" ]] && continue
+    name=${cap%%=*}
+    args=${cap##*mktemp}
+    [[ "$args" =~ ^[[:space:]]*(-[dqu]+[[:space:]]*)*$ ]] || continue
+    cnt=$(printf '%s' "$cmd_clean" | grep -oE "(^|[^A-Za-z0-9_])${name}=" | wc -l | tr -d ' ')
+    [[ "$cnt" == "1" ]] || continue
+    case "$out" in *":$name:"*) : ;; *) out="${out}${name}:" ;; esac
+  done <<< "$caps"
+  printf '%s' "$out"
+}
+TEMP_VARS=$(collect_temp_vars)
+
 pre="(^|[;&|(]|[[:space:]])"
 
 block() {
@@ -150,6 +174,14 @@ abspath() {
 }
 
 is_allowed_operand() {
+  local vn
+  # Operand rooted at a variable provably holding a fresh mktemp path -> temp.
+  case "$1" in
+    '$'*)
+      vn=${1#\$}; vn=${vn#\{}; vn=${vn%%/*}; vn=${vn%\}}
+      case "$TEMP_VARS" in *":$vn:"*) return 0 ;; esac
+      ;;
+  esac
   case "$1" in
     *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;  # glob/var/home/escape/placeholder
     *..*) return 1 ;;                                              # traversal

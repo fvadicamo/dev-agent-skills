@@ -1,7 +1,7 @@
 {
   "name": "guardrails",
-  "description": "Safety guardrails for running Claude Code with reduced supervision. The guard-destructive PreToolUse hook matches against a normalized view of each command (heredoc bodies and comments stripped, quoted strings neutralized except interpreter arguments like ssh / sh -c / eval / su / doas), so a command that merely mentions a destructive pattern is not flagged. It hard-blocks catastrophic Bash commands (rm -rf /, rsync --delete, docker volume rm) and makes rm/rmdir scope-aware: operations whose operands all resolve inside the allowed workspace (the session project root, temp dirs, or any $GUARD_ALLOWED_EXTRA root) run silently, while anything outside it (or any glob/variable/escape it cannot resolve) raises a single reflective confirmation. git reset --hard / clean / restore, shred, dd, mkfs still always prompt.",
-  "version": "1.6.1",
+  "description": "Safety guardrails for running Claude Code with reduced supervision. The guard-destructive PreToolUse hook matches against a normalized view of each command (heredoc bodies and comments stripped, quoted strings neutralized except interpreter arguments like ssh / sh -c / eval / su / doas), so a command that merely mentions a destructive pattern is not flagged. It hard-blocks catastrophic Bash commands (rm -rf /, rsync --delete, docker volume rm) and makes rm/rmdir scope-aware: operations whose operands all resolve inside the allowed workspace (the session project root, temp dirs, any $GUARD_ALLOWED_EXTRA root, or a variable assigned from a bare mktemp earlier in the same command) run silently, while anything outside it (or any glob/variable/escape it cannot resolve) raises a single reflective confirmation. git reset --hard / clean / restore, shred, dd, mkfs still always prompt.",
+  "version": "1.6.2",
   "author": {
     "name": "Francesco Vadicamo",
     "email": "fvadicamo@gmail.com"
