@@ -106,8 +106,11 @@ For a `develop` → `main` merge, run the same command **without** `--delete-bra
 
 ### 6. Post-merge cleanup
 
+Sync the branch that received the merge (the PR base), not always `develop`:
+
 ```bash
-git checkout develop && git pull origin develop
+BASE=$(gh pr view $PR --json baseRefName -q .baseRefName)
+git checkout "$BASE" && git pull origin "$BASE"
 ```
 
 ### 7. Check milestone completion

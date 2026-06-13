@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.4] - 2026-06-13
 
+### Added
+
+#### guardrails plugin
+- Regression test suite for the `guard-destructive` hook at `plugins/guardrails/tests/` (`run.sh` + `cases/*.txt`), runnable with `bash plugins/guardrails/tests/run.sh`; exits non-zero on failure and runs on macOS and Linux.
+- Pre-commit hook (`.githooks/pre-commit`) that runs the suite automatically when the hook or its tests are staged, enabled per clone with `git config core.hooksPath .githooks`.
+- README and CLAUDE.md documentation for the test suite and the git-hooks bootstrap.
+
 ### Changed
 
 #### github-workflow plugin
 - `github-pr-merge` is now merge-direction aware for branch deletion. It deletes the head branch (`--delete-branch`) only for a topic branch (`feature`/`fix`/etc.) merging into `develop`; on a `develop` → `main` merge it omits the flag and never proposes deleting `develop`. Previously the skill always passed `--delete-branch`, which would have deleted the long-lived `develop` branch when promoting it to `main`.
+- `github-pr-merge` post-merge cleanup now syncs the PR base branch (`develop` or `main`) instead of always checking out `develop`.
 
 ## [1.6.3] - 2026-06-13
 
