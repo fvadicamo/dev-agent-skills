@@ -22,3 +22,9 @@ ASK ::: - ::: D=/tmp/x; read D < /etc/passwd; rm -rf "$D"
 ASK ::: - ::: D=/tmp/x; rm -rf "$D/../../etc"
 # --- catastrophic still hard-blocks even with a static temp var present ---
 BLOCK ::: - ::: D=/tmp/x; rm -rf /
+# --- variable NAME with metacharacters is not a resolvable ref -> must prompt ---
+# ($A.B is $A + ".B"; the name must not be fed to the matchers as a regex/glob)
+ASK ::: - ::: AXB=/tmp/x; rm -rf "$A.B"
+ASK ::: - ::: Afoo_xB=/tmp/x; rm -rf "$A.*B"
+ASK ::: - ::: D=/tmp/x; rm -rf "$D*"
+ASK ::: - ::: D=$(mktemp -d); rm -rf "$D*"

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-06-15
+
+### Fixed
+
+#### guardrails plugin
+- `guard-destructive`: a `$`-operand whose extracted name is not a bare identifier (`$A.B`, `$A*`, `$A.*B`) is `$VAR` plus extra characters, not a variable by that name; it is no longer fed (unescaped) to the variable name matchers and instead falls through to the glob/var reject so it prompts. Closes a false negative from the 1.7.0 static-literal resolution where a decoy assignment (e.g. `AXB=/tmp/x`) could make `rm -rf "$A.B"` resolve to an in-workspace path and run silently; also hardens the pre-existing mktemp-variable match against the same class.
+
 ## [1.7.0] - 2026-06-15
 
 ### Changed

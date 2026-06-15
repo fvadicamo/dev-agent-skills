@@ -204,18 +204,27 @@ is_allowed_operand() {
   case "$1" in
     '$'*)
       vn=${1#\$}; vn=${vn#\{}; vn=${vn%%/*}; vn=${vn%\}}
-      case "$TEMP_VARS" in *":$vn:"*) return 0 ;; esac
-      # Same name assigned a static literal path here -> resolve and re-check the
-      # concrete path (any suffix preserved); the literal runs the normal rules.
-      local sv raw suffix
-      sv=$(resolve_static_var "$vn")
-      if [[ -n "$sv" ]]; then
-        raw=${1#\$}
-        if   [[ "$raw" == '{'* ]]; then suffix=${raw#*\}}
-        elif [[ "$raw" == */*  ]]; then suffix=/${raw#*/}
-        else suffix=""; fi
-        is_allowed_operand "$sv$suffix"; return $?
-      fi
+      # Resolve only a bare identifier. $A.B / $A* are $VAR plus extra characters,
+      # not a variable named "A.B": don't feed them (unescaped) to the name
+      # matchers; leave them to the glob/var reject below so they prompt.
+      case "$vn" in
+        ''|*[!A-Za-z0-9_]*) : ;;
+        *)
+          case "$TEMP_VARS" in *":$vn:"*) return 0 ;; esac
+          # Same name assigned a static literal path here -> resolve and re-check
+          # the concrete path (any suffix preserved); the literal runs the normal
+          # rules.
+          local sv raw suffix
+          sv=$(resolve_static_var "$vn")
+          if [[ -n "$sv" ]]; then
+            raw=${1#\$}
+            if   [[ "$raw" == '{'* ]]; then suffix=${raw#*\}}
+            elif [[ "$raw" == */*  ]]; then suffix=/${raw#*/}
+            else suffix=""; fi
+            is_allowed_operand "$sv$suffix"; return $?
+          fi
+          ;;
+      esac
       ;;
   esac
   case "$1" in
