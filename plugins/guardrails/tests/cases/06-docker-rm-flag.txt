@@ -1,0 +1,17 @@
+# Fix 2b: `docker run --rm ...` is the container flag, not the rm command. The
+# operand scan must anchor on a real rm/rmdir WORD, not the rm inside --rm.
+# --- the false positive being fixed: only deletion is in-scope -> silent ---
+SILENT ::: - ::: docker run --rm -v /srv/data:/data busybox rm -rf /tmp/junk
+SILENT ::: - ::: docker run --rm img sleep 1
+SILENT ::: - ::: docker run --rm -v /srv/x:/x img true
+# --- a real container rm of an OUTSIDE path must still prompt ---
+ASK ::: - ::: docker run --rm -v /srv/data:/data busybox rm -rf /data/x
+ASK ::: - ::: docker run --rm -v /:/host busybox rm -rf /host/etc
+# --- catastrophic still hard-blocks (unaffected by the anchor) ---
+BLOCK ::: - ::: docker run --rm -v x:y img sh -c 'rm -rf /'
+BLOCK ::: - ::: docker volume rm myvol
+BLOCK ::: - ::: docker rm -v cont
+# --- regression: the remote/EXTRA mechanism behind Fix 1 (rene-agent) ---
+ASK ::: - ::: ssh host 'rm -f /srv/oc-rene-dev/.openclaw/x.bak'
+SILENT ::: /srv/oc-rene-dev/.openclaw ::: ssh host 'rm -f /srv/oc-rene-dev/.openclaw/x.bak'
+BLOCK ::: /srv/oc-rene-dev/.openclaw ::: ssh host 'rm -rf /'

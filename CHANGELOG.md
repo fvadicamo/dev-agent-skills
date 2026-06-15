@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-06-15
+
+### Changed
+
+#### guardrails plugin
+- `guard-destructive` `rm`/`rmdir` scope check now resolves a variable assigned a **static literal** path in the same command (`ROOT=/tmp/x; rm -rf "$ROOT"`): the value is known exactly, so it runs silently when it resolves inside the workspace, exactly as the inline literal would. Conservative like the mktemp path (single assignment, pure-literal RHS with no `$`/substitution/glob/`~`/`..`, name not rebound as a bareword); a reassigned, loop/read-rebound or `$`-substituted variable still prompts.
+
+### Fixed
+
+#### guardrails plugin
+- `guard-destructive` operand scan no longer reads the `rm` inside a flag like `docker run --rm` as the `rm` command (the verb is anchored as a word), removing a false confirmation on `docker run --rm -v host:container image ...` whose only deletion is in-scope.
+- `guard-destructive` now checks every `rm`/`rmdir` on the command line, not just the first one: a chained `rm -rf /tmp/a && rm -rf /etc` (a false negative that previously ran silently) now prompts.
+
 ## [1.6.5] - 2026-06-13
 
 ### Changed

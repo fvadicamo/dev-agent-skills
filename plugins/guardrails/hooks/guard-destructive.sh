@@ -132,6 +132,27 @@ collect_temp_vars() {
 }
 TEMP_VARS=$(collect_temp_vars)
 
+# A variable assigned a STATIC LITERAL path in this same command (e.g. ROOT=/tmp/x).
+# Its value is known exactly, so resolving "$ROOT" and running the normal scope check
+# is as safe as if the literal had been written inline. Conservative, like the mktemp
+# path: only a single assignment, a pure-literal RHS (no $, command substitution, glob,
+# ~, ..) and a name never rebound as a bareword qualifies. Echoes the literal, or
+# nothing when it does not qualify.
+resolve_static_var() {
+  local name=$1 cnt cap val
+  cnt=$(printf '%s' "$cmd_clean" | grep -oE "(^|[^A-Za-z0-9_])${name}=" | wc -l | tr -d ' ')
+  [[ "$cnt" == "1" ]] || return 0
+  # Rebound elsewhere as a bareword (for/read/...) -> value at rm-time unknown.
+  printf '%s' "$cmd_clean" | grep -qE "(^|[^A-Za-z0-9_\$\{])${name}([^A-Za-z0-9_=]|\$)" && return 0
+  cap=$(printf '%s' "$cmd_clean" | grep -oE "(^|[^A-Za-z0-9_])${name}=[^[:space:];&|()<>]*" | head -1)
+  val=${cap#*=}
+  val=${val%\"}; val=${val#\"}; val=${val%\'}; val=${val#\'}
+  case "$val" in
+    ''|*'$'*|*'`'*|*'*'*|*'?'*|*'['*|*'~'*|*'\'*|*..*) return 0 ;;
+  esac
+  printf '%s' "$val"
+}
+
 pre="(^|[;&|(]|[[:space:]])"
 
 block() {
@@ -184,6 +205,17 @@ is_allowed_operand() {
     '$'*)
       vn=${1#\$}; vn=${vn#\{}; vn=${vn%%/*}; vn=${vn%\}}
       case "$TEMP_VARS" in *":$vn:"*) return 0 ;; esac
+      # Same name assigned a static literal path here -> resolve and re-check the
+      # concrete path (any suffix preserved); the literal runs the normal rules.
+      local sv raw suffix
+      sv=$(resolve_static_var "$vn")
+      if [[ -n "$sv" ]]; then
+        raw=${1#\$}
+        if   [[ "$raw" == '{'* ]]; then suffix=${raw#*\}}
+        elif [[ "$raw" == */*  ]]; then suffix=/${raw#*/}
+        else suffix=""; fi
+        is_allowed_operand "$sv$suffix"; return $?
+      fi
       ;;
   esac
   case "$1" in
@@ -203,31 +235,38 @@ is_allowed_operand() {
 
 # Detection runs on $scan; operands are enumerated from $cmd_clean (real paths).
 scoped_check() {
-  local verb=$1 seg listing="" operands=0 outside=0 tok p
-  seg=$(echo "$cmd_clean" | grep -oE "${verb}[[:space:]][^;&|]*" | head -1)
-  for tok in ${seg#${verb} }; do
-    [[ "$tok" == -* ]] && continue
-    p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
-    operands=$((operands + 1))
-    if is_allowed_operand "$p"; then
-      if [[ -d "$p" ]]; then
-        n=$(find "$p" -type f 2>/dev/null | wc -l | tr -d ' ')
-        listing+=$'\n'"  [in-scope DIR]  $p  ($n files inside)"
+  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n
+  # Enumerate EVERY occurrence of the verb as a WORD (line start or after a
+  # separator/space): a flag like docker's --rm is not read as `rm`, and a chained
+  # `rm a && rm /etc` has ALL targets checked, not just the first.
+  segs=$(printf '%s' "$cmd_clean" | grep -oE "(^|[[:space:];&|(])${verb}[[:space:]][^;&|]*")
+  while IFS= read -r seg; do
+    [[ -z "$seg" ]] && continue
+    seg=${seg#[[:space:];&|(]}
+    for tok in ${seg#${verb} }; do
+      [[ "$tok" == -* ]] && continue
+      p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
+      operands=$((operands + 1))
+      if is_allowed_operand "$p"; then
+        if [[ -d "$p" ]]; then
+          n=$(find "$p" -type f 2>/dev/null | wc -l | tr -d ' ')
+          listing+=$'\n'"  [in-scope DIR]  $p  ($n files inside)"
+        else
+          listing+=$'\n'"  [in-scope]      $p"
+        fi
       else
-        listing+=$'\n'"  [in-scope]      $p"
+        outside=$((outside + 1))
+        if [[ -d "$p" ]]; then
+          n=$(find "$p" -type f 2>/dev/null | wc -l | tr -d ' ')
+          listing+=$'\n'"  [OUTSIDE DIR]   $p  ($n files inside)"
+        elif [[ -e "$p" ]]; then
+          listing+=$'\n'"  [OUTSIDE]       $p"
+        else
+          listing+=$'\n'"  [UNRESOLVED]    $tok  (glob/var/escape/missing: treated as outside)"
+        fi
       fi
-    else
-      outside=$((outside + 1))
-      if [[ -d "$p" ]]; then
-        n=$(find "$p" -type f 2>/dev/null | wc -l | tr -d ' ')
-        listing+=$'\n'"  [OUTSIDE DIR]   $p  ($n files inside)"
-      elif [[ -e "$p" ]]; then
-        listing+=$'\n'"  [OUTSIDE]       $p"
-      else
-        listing+=$'\n'"  [UNRESOLVED]    $tok  (glob/var/escape/missing: treated as outside)"
-      fi
-    fi
-  done
+    done
+  done <<< "$segs"
   [[ "$operands" -gt 0 && "$outside" -eq 0 ]] && exit 0
   local msg="'$verb' touches paths OUTSIDE the allowed workspace. Before you confirm, re-check: is this deletion part of the process you were following and expected? Could it destroy pre-existing user data, or anything outside the work area? Re-verify the targets and parameters."
   [[ -n "$listing" ]] && msg+=$'\n'"Targets resolved now:$listing"

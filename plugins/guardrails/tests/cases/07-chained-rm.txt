@@ -1,0 +1,15 @@
+# Fix 2c: scoped_check checks EVERY rm/rmdir on the line, not just the first one.
+# A chained command whose LATER rm leaves the workspace must still prompt.
+# --- second rm outside -> ASK (the false negative being closed) ---
+ASK ::: - ::: rm -rf /tmp/a && rm -rf /etc
+ASK ::: - ::: rm -rf /tmp/a; rm -rf /etc
+ASK ::: - ::: rm -rf nodes; rm -rf /etc/hosts
+ASK ::: - ::: rm README.md; rm /etc/hosts
+ASK ::: - ::: rmdir nodes; rmdir /etc
+# --- rm at the START of a later line (multi-line) is still checked ---
+ASK ::: - ::: cd /tmp/x<NL>rm -rf /etc
+# --- all targets in-scope across multiple rm -> still silent ---
+SILENT ::: - ::: rm -rf /tmp/a && rm -rf /tmp/b
+SILENT ::: - ::: rm -rf nodes; rm README.md
+# --- in-scope rm then catastrophic -> hard block (catastrophic runs first) ---
+BLOCK ::: - ::: rm -rf /tmp/a && rm -rf /
