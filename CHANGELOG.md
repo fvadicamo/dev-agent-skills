@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-06-17
+
+### Changed
+
+#### guardrails plugin
+- `guard-destructive` `rm`/`rmdir` scope check now resolves the integer-only special shell variables `$$`, `$!`, `$PPID`, `$BASHPID` and `$RANDOM` (to a digit) before the in-scope check. They expand to a bare number that cannot contain `/` or `..`, so they never move a path out of its literal parent; an otherwise in-scope deletion such as `rm -f /tmp/suite_$$.log` (the common test-harness temp-file idiom) now runs silently instead of prompting on the unresolvable `$$`.
+- Conservative by design: only these five special vars are resolved, matched on a word boundary (`$RANDOMX` and `${MYPID}` are unaffected). Every other `$VAR` stays unresolvable and prompts as before, the `..` traversal reject still runs first, a special var that resolves outside the workspace still prompts, and catastrophic `rm -rf /` still hard-blocks.
+
 ## [1.7.1] - 2026-06-15
 
 ### Fixed

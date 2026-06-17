@@ -24,7 +24,11 @@
 #   - any colon-separated extra roots in $GUARD_ALLOWED_EXTRA (per-node scratch),
 #   - a variable provably assigned from a bare `mktemp`/`mktemp -d` earlier in the
 #     SAME command (the "create temp workspace ... rm -rf it" idiom); see
-#     collect_temp_vars. Variables in general stay unresolvable -> prompt.
+#     collect_temp_vars,
+#   - the integer-only special shell vars $$, $!, $PPID, $BASHPID, $RANDOM, which
+#     expand to a bare number and so cannot move a path out of its literal parent
+#     (e.g. /tmp/suite_$$.log stays under /tmp).
+# A generic variable in general stays unresolvable -> prompt.
 # Anything OUTSIDE that space, or any operand the hook cannot resolve before
 # execution (glob *.o, variable $BUILD, ~ path, backslash escape, {} placeholder),
 # is treated as OUTSIDE -> a single confirmation carrying the reflective question.
@@ -227,10 +231,18 @@ is_allowed_operand() {
       esac
       ;;
   esac
-  case "$1" in
+  # Integer-only special shell vars ($$, $!, $PPID, $BASHPID, $RANDOM) expand to a
+  # bare number: they cannot hold a "/" or "..", so they never change which
+  # directory the path resolves under. Substitute them with a digit so an
+  # otherwise-static path (e.g. rm /tmp/suite_$$.log, common in test harnesses) is
+  # range-checked normally instead of being rejected as an unresolved variable.
+  # Any other $VAR can expand to anything and stays unresolved -> prompt.
+  local op
+  op=$(printf '%s' "$1" | sed -E 's/\$\$|\$!/0/g; s/\$\{(PPID|BASHPID|RANDOM)\}/0/g; s/\$(PPID|BASHPID|RANDOM)([^A-Za-z0-9_]|$)/0\2/g')
+  case "$op" in
     *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;  # glob/var/home/escape/placeholder
   esac
-  local ap; ap=$(abspath "$1")
+  local ap; ap=$(abspath "$op")
   case "$ap" in
     /tmp/?*|/private/tmp/?*|/var/tmp/?*|/var/folders/?*) return 0 ;;
   esac
