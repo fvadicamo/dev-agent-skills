@@ -1,0 +1,26 @@
+# Integer-only special shell vars ($$, $!, $PPID, $BASHPID, $RANDOM) in rm scope (v1.7.2).
+# They expand to a bare number, so they cannot move a path out of its literal
+# parent: an otherwise in-scope path stays in scope and runs silently.
+# --- faithful repro of the reported test-runner cleanup ---
+SILENT ::: - ::: rm -f /tmp/suite_$$.log
+# --- each special var, under a temp dir: now silent ---
+SILENT ::: - ::: rm -f /tmp/out.$!.log
+SILENT ::: - ::: rm -rf /tmp/run_${PPID}
+SILENT ::: - ::: rm -f /var/tmp/x.$BASHPID
+SILENT ::: - ::: rm -f /tmp/cache.$RANDOM
+SILENT ::: - ::: rm -f /tmp/a_$$ /tmp/b_$$
+# --- in-scope project path with $$ (CWD is the tests dir = project root) ---
+SILENT ::: - ::: rm -f build_$$.log
+# --- must still prompt: generic variables stay unresolved ---
+ASK ::: - ::: rm -f /tmp/suite_$X.log
+ASK ::: - ::: rm -rf /tmp/$DIR
+# --- look-alike names are NOT the special var (boundary check) ---
+ASK ::: - ::: rm -f /tmp/$RANDOMX.log
+ASK ::: - ::: rm -rf /tmp/${MYPID}
+# --- traversal still wins even with a numeric special var ---
+ASK ::: - ::: rm -rf /tmp/../$$/etc
+# --- a special var resolving OUTSIDE the workspace still prompts ---
+ASK ::: - ::: rm -f /etc/suite_$$.log
+ASK ::: - ::: rm -rf /$$
+# --- catastrophic still hard-blocks ---
+BLOCK ::: - ::: rm -rf /
