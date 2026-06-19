@@ -106,8 +106,28 @@ transform() {
   }'
 }
 
-cmd_clean=$(printf '%s' "$cmd_raw" | strip_heredocs | transform clean)
-scan=$(printf '%s' "$cmd_raw" | strip_heredocs | transform scan)
+# Normalize to a FIXPOINT. A single pass exposes only the OUTERMOST interpreter
+# argument (e.g. the quoted command in `ssh host '...'`), leaving a nested
+# `bash -lc "rm ..."` quoted VERBATIM, so the inner command (even `rm -rf /`) was
+# never seen by the pattern matchers. Re-applying the normalization until it
+# stabilizes peels one interpreter layer per pass: the inner command is exposed
+# when its wrapper is an interpreter and neutralized when it is data (e.g. an
+# `echo "..."`). Bounded to a few passes for pathological deep nesting.
+renorm() {
+  local mode=$1 cur prev base
+  # strip_heredocs ONCE on the raw command (re-running it on transformed text
+  # would re-read a surviving `<<DELIM` marker as a new, unterminated heredoc).
+  base=$(printf '%s' "$cmd_raw" | strip_heredocs)
+  cur=$(printf '%s' "$base" | transform "$mode")
+  for _ in 1 2 3 4 5 6; do
+    prev=$cur
+    cur=$(printf '%s' "$prev" | transform "$mode")
+    [[ "$cur" == "$prev" ]] && break
+  done
+  printf '%s' "$cur"
+}
+cmd_clean=$(renorm clean)
+scan=$(renorm scan)
 # Fail safe: if normalization yields nothing, fall back to the raw command.
 [[ -z "${scan//[[:space:]]/}" ]] && scan="$cmd_raw"
 [[ -z "${cmd_clean//[[:space:]]/}" ]] && cmd_clean="$cmd_raw"

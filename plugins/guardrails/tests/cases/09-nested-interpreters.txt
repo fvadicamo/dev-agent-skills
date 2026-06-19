@@ -1,0 +1,27 @@
+# Nested interpreters (v1.7.3). A destructive command inside an INNER interpreter
+# quote wrapped by an OUTER interpreter (ssh '... bash -lc "rm ..."') must still be
+# detected. Before fixpoint normalization only the outer layer was exposed, leaving
+# the inner `"rm ..."` verbatim so the command escaped detection entirely, including
+# a hard-block bypass of `rm -rf /`.
+# --- the bypass that motivated this: must still hard-block ---
+BLOCK ::: - ::: ssh host 'bash -lc "rm -rf /"'
+BLOCK ::: - ::: ssh host 'sh -c "rm -rf /"'
+BLOCK ::: - ::: ssh host "bash -lc 'rm -rf /'"
+BLOCK ::: - ::: ssh host 'bash -lc "rm -rf ~"'
+BLOCK ::: - ::: ssh host 'bash -lc "rm -rf $HOME"'
+# --- nested rm OUTSIDE the workspace: must prompt ---
+ASK ::: - ::: ssh host 'bash -lc "rm -rf /etc/foo"'
+ASK ::: - ::: ssh host 'bash -lc "rm -f ~/cache-query.py"'
+ASK ::: - ::: ssh host 'bash -lc "rm -rf /var/data"'
+# --- rm as the FIRST token inside the inner quote (the exact gap) ---
+ASK ::: - ::: ssh host 'bash -lc "rm -rf /opt/x; echo done"'
+# --- a chained command before rm was already caught; still is ---
+ASK ::: - ::: ssh host 'bash -lc "echo hi; rm -rf /etc/foo"'
+# --- no false positive from the fix: nested temp / extra-root cleanup stays silent ---
+SILENT ::: - ::: ssh host 'bash -lc "rm -rf /tmp/build"'
+SILENT ::: /srv/oc-rene-dev/.openclaw ::: ssh host 'bash -lc "rm -rf /srv/oc-rene-dev/.openclaw/sub"'
+# --- benign nested command: nothing destructive, no prompt ---
+SILENT ::: - ::: ssh host 'bash -lc "echo hello world"'
+# Known limit (unchanged): a backslash-ESCAPED inner quote (e.g. a third nesting
+# level written as \"rm -rf /\") is not unescaped, so it can still evade detection,
+# the same class as other backslash/`\$` escaping limits. Not asserted here.

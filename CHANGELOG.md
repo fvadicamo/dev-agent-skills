@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.3] - 2026-06-19
+
+### Fixed
+
+#### guardrails plugin
+- `guard-destructive` now normalizes each command to a fixpoint, closing a detection bypass for a destructive command nested inside a SECOND interpreter layer. A single pass exposed only the outermost interpreter argument (e.g. the `'...'` of `ssh host '...'`), leaving an inner `bash -lc "rm ..."` quoted verbatim; a destructive command that was the first token inside that inner quote escaped detection entirely, including a hard-block bypass where `ssh host 'bash -lc "rm -rf /"'` ran silently. The normalization is re-applied until stable, peeling one interpreter layer per pass (an inner command is exposed when its wrapper is an interpreter, neutralized when it is data such as `echo "..."`). A chained inner command (`...; rm ...`) was already detected and still is.
+- Known residual limit (unchanged): a backslash-escaped inner quote (e.g. `\"rm -rf /\"` at a third nesting level) is not unescaped and can still evade detection, the same class as the documented `\$`/backslash escaping limits.
+
 ## [1.7.2] - 2026-06-17
 
 ### Changed
