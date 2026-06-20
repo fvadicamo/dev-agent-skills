@@ -259,8 +259,32 @@ is_allowed_operand() {
   # Any other $VAR can expand to anything and stays unresolved -> prompt.
   local op
   op=$(printf '%s' "$1" | sed -E 's/\$\$|\$!/0/g; s/\$\{(PPID|BASHPID|RANDOM)\}/0/g; s/\$(PPID|BASHPID|RANDOM)([^A-Za-z0-9_]|$)/0\2/g')
+  # Unresolvable and NOT a plain glob: variable, home, command-sub, escape, brace.
   case "$op" in
-    *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;  # glob/var/home/escape/placeholder
+    *'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;
+  esac
+  # A DIRECTORY-ANCHORED glob (e.g. /tmp/probe*.py) cannot escape its literal
+  # directory prefix: a glob metachar never matches "/" and ".." was rejected
+  # above, so every match stays under that prefix. Allow it iff the prefix resolves
+  # inside an allowed root (this is also deterministic, unlike relying on whether
+  # the glob happens to match files on THIS host). A bare glob with no directory
+  # part (*.o) has no anchor and still prompts.
+  case "$op" in
+    *'*'*|*'?'*|*'['*)
+      local gpfx gap r
+      gpfx=${op%%[*?[]*}
+      case "$gpfx" in
+        */*) gpfx=${gpfx%/*}/ ;;
+        *)   return 1 ;;
+      esac
+      gap=$(abspath "$gpfx")
+      case "$gap" in /tmp/*|/private/tmp/*|/var/tmp/*|/var/folders/*) return 0 ;; esac
+      [[ "$project_root" != "__none__" ]] && case "$gap" in "$project_root"/*) return 0 ;; esac
+      local IFS=:
+      for r in $GUARD_ALLOWED_EXTRA; do
+        [[ -n "$r" ]] && case "$gap" in "$r"/*) return 0 ;; esac
+      done
+      return 1 ;;
   esac
   local ap; ap=$(abspath "$op")
   case "$ap" in
@@ -276,7 +300,14 @@ is_allowed_operand() {
 
 # Detection runs on $scan; operands are enumerated from $cmd_clean (real paths).
 scoped_check() {
-  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n
+  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n skip_next=""
+  # Disable pathname expansion: operands are enumerated by word-splitting only.
+  # Otherwise a glob operand would be expanded against the LOCAL filesystem, which
+  # is both non-deterministic (verdict depends on local matches) and a hazard
+  # (`rm -rf /*` would expand to the whole tree and `find`-count it). Globs are
+  # judged by their literal prefix in is_allowed_operand instead. scoped_check
+  # always exits before returning, so this does not leak to the caller.
+  set -f
   # Enumerate EVERY occurrence of the verb as a WORD (line start or after a
   # separator/space): a flag like docker's --rm is not read as `rm`, and a chained
   # `rm a && rm /etc` has ALL targets checked, not just the first.
@@ -284,8 +315,17 @@ scoped_check() {
   while IFS= read -r seg; do
     [[ -z "$seg" ]] && continue
     seg=${seg#[[:space:];&|(]}
+    skip_next=""
     for tok in ${seg#${verb} }; do
+      [[ -n "$skip_next" ]] && { skip_next=""; continue; }   # target of a bare redirection operator
       [[ "$tok" == -* ]] && continue
+      # Shell redirections are not rm operands. A bare operator (`>`, `2>`, ...)
+      # takes the NEXT token as its target; an operator with the target attached
+      # (`2>/dev/null`, `>>f`, `2>&1`) is self-contained.
+      case "$tok" in
+        '>'|'>>'|'<'|[0-9]'>'|[0-9]'>>'|[0-9]'<') skip_next=1; continue ;;
+        *'>'*|*'<'*) continue ;;
+      esac
       p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
       operands=$((operands + 1))
       if is_allowed_operand "$p"; then

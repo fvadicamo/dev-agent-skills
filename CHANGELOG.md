@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-06-20
+
+### Changed
+
+#### guardrails plugin
+- rm/rmdir scope: a directory-anchored glob whose literal prefix resolves inside an allowed root (e.g. `rm -f /tmp/probe*.py`, or a path under `$GUARD_ALLOWED_EXTRA`) now runs silently. A glob metacharacter never matches `/` and `..` is rejected first, so every match is confined under that literal prefix; the verdict is now deterministic instead of depending on whether the glob happens to match files on the host running the hook. A bare glob with no directory part (`*.o`) has no anchor and still prompts, and a glob anchored outside every allowed root still prompts.
+
+### Fixed
+
+#### guardrails plugin
+- rm/rmdir operand enumeration no longer performs local pathname expansion (`set -f`). Previously a glob operand was expanded against the local filesystem, which was non-deterministic and a hazard: `rm -rf /*` expanded to the entire tree and `find`-counted each entry, hanging the hook. Globs are now judged by their literal prefix (see above) without touching the filesystem.
+- Shell redirections on the rm/rmdir line (`2>/dev/null`, `> file`, `2>&1`) are no longer mistaken for rm operands. This removes a false confirmation when a redirection target resolved outside the workspace (e.g. `rm -f /tmp/x > /var/log/out` treated `/var/log/out` as a deletion target).
+
 ## [1.7.3] - 2026-06-19
 
 ### Fixed
