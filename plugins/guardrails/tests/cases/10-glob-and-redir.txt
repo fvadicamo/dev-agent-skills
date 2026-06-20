@@ -36,3 +36,6 @@ ASK ::: - ::: rm -f /etc/secret 2>/dev/null
 # --- an allowed root WITH a trailing slash still matches, literal and glob (v1.7.4) ---
 SILENT ::: /srv/scratch/ ::: rm -f /srv/scratch/build.log
 SILENT ::: /srv/scratch/ ::: rm -f /srv/scratch/out-*.log
+# --- the <> read-write redirect (no &/|, so not segment-truncated) is not an operand ---
+SILENT ::: - ::: rm -f /tmp/x <> /etc/out
+SILENT ::: - ::: rm -f /tmp/x >> /etc/append.log

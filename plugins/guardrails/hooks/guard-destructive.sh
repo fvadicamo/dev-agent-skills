@@ -206,6 +206,12 @@ echo "$scan" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+\\?(/|
 # --- Allowed-workspace resolution (used by rm / rmdir) ---
 
 project_root="${CLAUDE_PROJECT_DIR:-$cwd}"
+# Drop a trailing slash up front, BEFORE the trust checks below: a root like /srv/
+# would otherwise pass the shallow-dir check (it has two slashes) and then, once
+# stripped to /srv, be trusted -- a shallow dir must stay untrusted. It also lets
+# "$project_root"/... patterns match cleanly instead of building /srv/x//... .
+# Extra roots ($GUARD_ALLOWED_EXTRA) are normalized the same way at each use below.
+project_root=${project_root%/}
 case "$project_root" in
   ""|"/"|"$HOME") project_root="__none__" ;;
 esac
@@ -215,10 +221,6 @@ case "$project_root" in
   */*/*) : ;;
   *) project_root="__none__" ;;
 esac
-# Drop a trailing slash so "$project_root"/... patterns match cleanly (a root like
-# /srv/x/ would otherwise build /srv/x//... and never match). Same for the extra
-# roots below, normalized at use.
-project_root=${project_root%/}
 
 abspath() {
   case "$1" in
@@ -311,14 +313,7 @@ is_allowed_operand() {
 
 # Detection runs on $scan; operands are enumerated from $cmd_clean (real paths).
 scoped_check() {
-  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n skip_next=""
-  # Disable pathname expansion: operands are enumerated by word-splitting only.
-  # Otherwise a glob operand would be expanded against the LOCAL filesystem, which
-  # is both non-deterministic (verdict depends on local matches) and a hazard
-  # (`rm -rf /*` would expand to the whole tree and `find`-count it). Globs are
-  # judged by their literal prefix in is_allowed_operand instead. scoped_check
-  # always exits before returning, so this does not leak to the caller.
-  set -f
+  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n skip_next="" toks
   # Enumerate EVERY occurrence of the verb as a WORD (line start or after a
   # separator/space): a flag like docker's --rm is not read as `rm`, and a chained
   # `rm a && rm /etc` has ALL targets checked, not just the first.
@@ -327,14 +322,22 @@ scoped_check() {
     [[ -z "$seg" ]] && continue
     seg=${seg#[[:space:];&|(]}
     skip_next=""
-    for tok in ${seg#${verb} }; do
+    # Split operands by whitespace WITHOUT pathname expansion: `read -ra` does no
+    # globbing. (Plain `for tok in $seg` would expand a glob operand against the
+    # LOCAL filesystem -- non-deterministic, and a hazard: `rm -rf /*` would expand
+    # to the whole tree and find-count it.) Globs are judged by their literal
+    # prefix in is_allowed_operand instead.
+    read -ra toks <<< "${seg#${verb} }"
+    for tok in "${toks[@]}"; do
       [[ -n "$skip_next" ]] && { skip_next=""; continue; }   # target of a bare redirection operator
       [[ "$tok" == -* ]] && continue
-      # Shell redirections are not rm operands. A bare operator (`>`, `2>`, ...)
-      # takes the NEXT token as its target; an operator with the target attached
-      # (`2>/dev/null`, `>>f`, `2>&1`) is self-contained.
+      # Shell redirections are not rm operands. A bare operator ending in > or <
+      # (`>`, `>>`, `2>`, `<`, `<>`, ...) takes the NEXT token as its target; an
+      # operator with the target attached (`2>/dev/null`, `>>f`, `2>&1`) is
+      # self-contained. (`&>` / `>&` contain `&` and are already cut from the
+      # segment by the [^;&|]* match, so they never reach here.)
       case "$tok" in
-        '>'|'>>'|'<'|[0-9]'>'|[0-9]'>>'|[0-9]'<') skip_next=1; continue ;;
+        *'>'|*'<') skip_next=1; continue ;;
         *'>'*|*'<'*) continue ;;
       esac
       p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
