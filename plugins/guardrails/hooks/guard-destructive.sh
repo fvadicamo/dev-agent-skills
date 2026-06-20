@@ -327,7 +327,7 @@ scoped_check() {
     # LOCAL filesystem -- non-deterministic, and a hazard: `rm -rf /*` would expand
     # to the whole tree and find-count it.) Globs are judged by their literal
     # prefix in is_allowed_operand instead.
-    read -ra toks <<< "${seg#${verb} }"
+    read -ra toks <<< "${seg#${verb}}"   # strip just the verb; read -ra drops the leading space/tab
     for tok in "${toks[@]}"; do
       [[ -n "$skip_next" ]] && { skip_next=""; continue; }   # target of a bare redirection operator
       [[ "$tok" == -* ]] && continue
