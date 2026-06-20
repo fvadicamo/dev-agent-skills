@@ -114,12 +114,14 @@ transform() {
 # when its wrapper is an interpreter and neutralized when it is data (e.g. an
 # `echo "..."`). Bounded to a few passes for pathological deep nesting.
 renorm() {
-  local mode=$1 cur prev base
+  local mode=$1 cur prev base i
   # strip_heredocs ONCE on the raw command (re-running it on transformed text
   # would re-read a surviving `<<DELIM` marker as a new, unterminated heredoc).
   base=$(printf '%s' "$cmd_raw" | strip_heredocs)
-  cur=$(printf '%s' "$base" | transform "$mode")
-  for _ in 1 2 3 4 5 6; do
+  # Start from the un-transformed text so an already-stable command (the common
+  # case: no nested interpreters) costs a SINGLE transform, not two.
+  cur=$base
+  for i in 1 2 3 4 5 6 7; do
     prev=$cur
     cur=$(printf '%s' "$prev" | transform "$mode")
     [[ "$cur" == "$prev" ]] && break
@@ -213,6 +215,10 @@ case "$project_root" in
   */*/*) : ;;
   *) project_root="__none__" ;;
 esac
+# Drop a trailing slash so "$project_root"/... patterns match cleanly (a root like
+# /srv/x/ would otherwise build /srv/x//... and never match). Same for the extra
+# roots below, normalized at use.
+project_root=${project_root%/}
 
 abspath() {
   case "$1" in
@@ -258,7 +264,12 @@ is_allowed_operand() {
   # range-checked normally instead of being rejected as an unresolved variable.
   # Any other $VAR can expand to anything and stays unresolved -> prompt.
   local op
-  op=$(printf '%s' "$1" | sed -E 's/\$\$|\$!/0/g; s/\$\{(PPID|BASHPID|RANDOM)\}/0/g; s/\$(PPID|BASHPID|RANDOM)([^A-Za-z0-9_]|$)/0\2/g')
+  # Named vars resolved FIRST (they need the following boundary char, which they
+  # restore via \2), then braced forms, then $$/$! last. This ordering resolves an
+  # adjacency like $PPID$$ ($PPID consumes nothing of $$, then $$ -> 0). \b is not
+  # used: BSD/macOS sed does not support it. (Two ADJACENT named vars, e.g.
+  # $PPID$RANDOM, still leave the second unresolved -> a prompt; harmless edge.)
+  op=$(printf '%s' "$1" | sed -E 's/\$(PPID|BASHPID|RANDOM)([^A-Za-z0-9_]|$)/0\2/g; s/\$\{(PPID|BASHPID|RANDOM)\}/0/g; s/\$\$|\$!/0/g')
   # Unresolvable and NOT a plain glob: variable, home, command-sub, escape, brace.
   case "$op" in
     *'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;
@@ -282,7 +293,7 @@ is_allowed_operand() {
       [[ "$project_root" != "__none__" ]] && case "$gap" in "$project_root"/*) return 0 ;; esac
       local IFS=:
       for r in $GUARD_ALLOWED_EXTRA; do
-        [[ -n "$r" ]] && case "$gap" in "$r"/*) return 0 ;; esac
+        [[ -n "$r" ]] && case "$gap" in "${r%/}"/*) return 0 ;; esac
       done
       return 1 ;;
   esac
@@ -293,7 +304,7 @@ is_allowed_operand() {
   [[ "$project_root" != "__none__" ]] && case "$ap" in "$project_root"/?*) return 0 ;; esac
   local IFS=: root
   for root in $GUARD_ALLOWED_EXTRA; do
-    [[ -n "$root" ]] && case "$ap" in "$root"/?*) return 0 ;; esac
+    [[ -n "$root" ]] && case "$ap" in "${root%/}"/?*) return 0 ;; esac
   done
   return 1
 }
