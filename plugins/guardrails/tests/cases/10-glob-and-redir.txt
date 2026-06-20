@@ -39,3 +39,12 @@ SILENT ::: /srv/scratch/ ::: rm -f /srv/scratch/out-*.log
 # --- the <> read-write redirect (no &/|, so not segment-truncated) is not an operand ---
 SILENT ::: - ::: rm -f /tmp/x <> /etc/out
 SILENT ::: - ::: rm -f /tmp/x >> /etc/append.log
+# --- CRITICAL: an operand GLUED to a redirect (no space) is a deletion bash still
+#     performs; it must be range-checked, not skipped as if it were a redirection.
+#     The silent bypass needs an in-scope operand alongside (so operands>0): the
+#     first case below ran SILENT before the fix while bash deleted /etc/passwd. ---
+ASK ::: - ::: rm /tmp/keep /etc/passwd>/dev/null
+ASK ::: - ::: rm /etc/passwd>/dev/null
+ASK ::: - ::: rm /etc/passwd> /dev/null
+ASK ::: - ::: rm -rf /var/lib/data>/tmp/log
+SILENT ::: - ::: rm /tmp/x>/dev/null

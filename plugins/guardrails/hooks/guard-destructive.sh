@@ -314,6 +314,7 @@ is_allowed_operand() {
 # Detection runs on $scan; operands are enumerated from $cmd_clean (real paths).
 scoped_check() {
   local verb=$1 seg segs listing="" operands=0 outside=0 tok p n skip_next="" toks
+  local re_rbare='^[0-9]*[<>]+$' re_ratt='^[0-9]*[<>]'
   # Enumerate EVERY occurrence of the verb as a WORD (line start or after a
   # separator/space): a flag like docker's --rm is not read as `rm`, and a chained
   # `rm a && rm /etc` has ALL targets checked, not just the first.
@@ -331,15 +332,17 @@ scoped_check() {
     for tok in "${toks[@]}"; do
       [[ -n "$skip_next" ]] && { skip_next=""; continue; }   # target of a bare redirection operator
       [[ "$tok" == -* ]] && continue
-      # Shell redirections are not rm operands. A bare operator ending in > or <
-      # (`>`, `>>`, `2>`, `<`, `<>`, ...) takes the NEXT token as its target; an
-      # operator with the target attached (`2>/dev/null`, `>>f`, `2>&1`) is
-      # self-contained. (`&>` / `>&` contain `&` and are already cut from the
+      # Shell redirections are not rm operands. A redirection token is an optional
+      # fd number followed by > or < (`>`, `>>`, `2>`, `<`, `<>`, `2>/dev/null`).
+      # Match ONLY that ANCHORED form, never a token that merely CONTAINS > -- an
+      # operand glued to a redirect (`/etc/passwd>/dev/null`, which bash still
+      # deletes) must fall through and be range-checked, not skipped. A bare
+      # operator takes the next token as its target; one with the target attached
+      # is self-contained. (`&>` / `>&` contain `&` and are already cut from the
       # segment by the [^;&|]* match, so they never reach here.)
-      case "$tok" in
-        *'>'|*'<') skip_next=1; continue ;;
-        *'>'*|*'<'*) continue ;;
-      esac
+      if   [[ "$tok" =~ $re_rbare ]]; then skip_next=1; continue
+      elif [[ "$tok" =~ $re_ratt  ]]; then continue
+      fi
       p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
       operands=$((operands + 1))
       if is_allowed_operand "$p"; then
