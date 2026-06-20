@@ -22,5 +22,9 @@ ASK ::: - ::: rm -rf /tmp/../$$/etc
 # --- a special var resolving OUTSIDE the workspace still prompts ---
 ASK ::: - ::: rm -f /etc/suite_$$.log
 ASK ::: - ::: rm -rf /$$
+# --- adjacency: a named special var immediately followed by $$ still resolves
+#     (v1.7.4 substitution reorder). Two ADJACENT named vars remain a rare residual.
+SILENT ::: - ::: rm -f /tmp/x_$PPID$$.log
+SILENT ::: - ::: rm -f /var/tmp/run.$$$BASHPID
 # --- catastrophic still hard-blocks ---
 BLOCK ::: - ::: rm -rf /

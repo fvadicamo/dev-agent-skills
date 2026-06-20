@@ -1,0 +1,50 @@
+# Directory-anchored globs (#2) and shell redirections (#3), v1.7.4.
+#
+# #2: a glob whose literal directory prefix is under an allowed root is confined
+# there (a glob metachar never crosses "/", and ".." is rejected first), so it is
+# in-scope deterministically -- regardless of whether it happens to match files on
+# THIS host (it previously prompted only when it matched nothing locally).
+# --- glob under /tmp / temp dirs: silent ---
+SILENT ::: - ::: rm -f /tmp/dbprobe*.py
+SILENT ::: - ::: rm -rf /tmp/run-*/cache
+SILENT ::: - ::: rm -f /var/tmp/session-?.log
+SILENT ::: - ::: rm -f /tmp/a-[0-9].tmp
+# --- glob under GUARD_ALLOWED_EXTRA: silent ---
+SILENT ::: /srv/oc-rene-dev/.openclaw ::: rm -f /srv/oc-rene-dev/.openclaw/telegram-inbound/news-inbound-*.jsonl
+# --- glob OUTSIDE every allowed root: still prompts ---
+ASK ::: - ::: rm -f /etc/*.conf
+ASK ::: - ::: rm -rf /var/lib/*
+ASK ::: /srv/oc-rene-dev/.openclaw ::: rm -f /srv/other/*.jsonl
+# --- BARE glob with no directory anchor: still prompts ---
+ASK ::: - ::: rm *.o
+ASK ::: - ::: rm -f *.tmp
+# --- traversal still wins over a glob ---
+ASK ::: - ::: rm -rf /tmp/../etc/*
+# --- catastrophic root glob is not anchored under any allowed root: prompts ---
+ASK ::: - ::: rm -rf /*
+#
+# #3: shell redirections in the rm line are NOT rm operands.
+# --- attached redirection target ignored; rm target in-scope -> silent ---
+SILENT ::: - ::: rm -f /tmp/x.log 2>/dev/null
+SILENT ::: - ::: rm -f /tmp/x.log >/dev/null 2>&1
+# --- redirection target as a SEPARATE token (bare operator) ignored ---
+SILENT ::: - ::: rm -f /tmp/x > /tmp/out.log
+# --- the latent false positive: an OUT-OF-SCOPE redirect target is not an rm operand ---
+SILENT ::: - ::: rm -f /tmp/x > /etc/outside.log
+# --- redirection does not hide an out-of-scope rm TARGET ---
+ASK ::: - ::: rm -f /etc/secret 2>/dev/null
+# --- an allowed root WITH a trailing slash still matches, literal and glob (v1.7.4) ---
+SILENT ::: /srv/scratch/ ::: rm -f /srv/scratch/build.log
+SILENT ::: /srv/scratch/ ::: rm -f /srv/scratch/out-*.log
+# --- the <> read-write redirect (no &/|, so not segment-truncated) is not an operand ---
+SILENT ::: - ::: rm -f /tmp/x <> /etc/out
+SILENT ::: - ::: rm -f /tmp/x >> /etc/append.log
+# --- CRITICAL: an operand GLUED to a redirect (no space) is a deletion bash still
+#     performs; it must be range-checked, not skipped as if it were a redirection.
+#     The silent bypass needs an in-scope operand alongside (so operands>0): the
+#     first case below ran SILENT before the fix while bash deleted /etc/passwd. ---
+ASK ::: - ::: rm /tmp/keep /etc/passwd>/dev/null
+ASK ::: - ::: rm /etc/passwd>/dev/null
+ASK ::: - ::: rm /etc/passwd> /dev/null
+ASK ::: - ::: rm -rf /var/lib/data>/tmp/log
+SILENT ::: - ::: rm /tmp/x>/dev/null

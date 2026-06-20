@@ -114,12 +114,14 @@ transform() {
 # when its wrapper is an interpreter and neutralized when it is data (e.g. an
 # `echo "..."`). Bounded to a few passes for pathological deep nesting.
 renorm() {
-  local mode=$1 cur prev base
+  local mode=$1 cur prev base i
   # strip_heredocs ONCE on the raw command (re-running it on transformed text
   # would re-read a surviving `<<DELIM` marker as a new, unterminated heredoc).
   base=$(printf '%s' "$cmd_raw" | strip_heredocs)
-  cur=$(printf '%s' "$base" | transform "$mode")
-  for _ in 1 2 3 4 5 6; do
+  # Start from the un-transformed text so an already-stable command (the common
+  # case: no nested interpreters) costs a SINGLE transform, not two.
+  cur=$base
+  for i in 1 2 3 4 5 6 7; do
     prev=$cur
     cur=$(printf '%s' "$prev" | transform "$mode")
     [[ "$cur" == "$prev" ]] && break
@@ -204,6 +206,12 @@ echo "$scan" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rR][a-zA-Z]*[[:space:]]+\\?(/|
 # --- Allowed-workspace resolution (used by rm / rmdir) ---
 
 project_root="${CLAUDE_PROJECT_DIR:-$cwd}"
+# Drop a trailing slash up front, BEFORE the trust checks below: a root like /srv/
+# would otherwise pass the shallow-dir check (it has two slashes) and then, once
+# stripped to /srv, be trusted -- a shallow dir must stay untrusted. It also lets
+# "$project_root"/... patterns match cleanly instead of building /srv/x//... .
+# Extra roots ($GUARD_ALLOWED_EXTRA) are normalized the same way at each use below.
+project_root=${project_root%/}
 case "$project_root" in
   ""|"/"|"$HOME") project_root="__none__" ;;
 esac
@@ -258,9 +266,38 @@ is_allowed_operand() {
   # range-checked normally instead of being rejected as an unresolved variable.
   # Any other $VAR can expand to anything and stays unresolved -> prompt.
   local op
-  op=$(printf '%s' "$1" | sed -E 's/\$\$|\$!/0/g; s/\$\{(PPID|BASHPID|RANDOM)\}/0/g; s/\$(PPID|BASHPID|RANDOM)([^A-Za-z0-9_]|$)/0\2/g')
+  # Named vars resolved FIRST (they need the following boundary char, which they
+  # restore via \2), then braced forms, then $$/$! last. This ordering resolves an
+  # adjacency like $PPID$$ ($PPID consumes nothing of $$, then $$ -> 0). \b is not
+  # used: BSD/macOS sed does not support it. (Two ADJACENT named vars, e.g.
+  # $PPID$RANDOM, still leave the second unresolved -> a prompt; harmless edge.)
+  op=$(printf '%s' "$1" | sed -E 's/\$(PPID|BASHPID|RANDOM)([^A-Za-z0-9_]|$)/0\2/g; s/\$\{(PPID|BASHPID|RANDOM)\}/0/g; s/\$\$|\$!/0/g')
+  # Unresolvable and NOT a plain glob: variable, home, command-sub, escape, brace.
   case "$op" in
-    *'*'*|*'?'*|*'['*|*'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;  # glob/var/home/escape/placeholder
+    *'$'*|*'`'*|*'~'*|*'\'*|*'{}'*) return 1 ;;
+  esac
+  # A DIRECTORY-ANCHORED glob (e.g. /tmp/probe*.py) cannot escape its literal
+  # directory prefix: a glob metachar never matches "/" and ".." was rejected
+  # above, so every match stays under that prefix. Allow it iff the prefix resolves
+  # inside an allowed root (this is also deterministic, unlike relying on whether
+  # the glob happens to match files on THIS host). A bare glob with no directory
+  # part (*.o) has no anchor and still prompts.
+  case "$op" in
+    *'*'*|*'?'*|*'['*)
+      local gpfx gap r
+      gpfx=${op%%[*?[]*}
+      case "$gpfx" in
+        */*) gpfx=${gpfx%/*}/ ;;
+        *)   return 1 ;;
+      esac
+      gap=$(abspath "$gpfx")
+      case "$gap" in /tmp/*|/private/tmp/*|/var/tmp/*|/var/folders/*) return 0 ;; esac
+      [[ "$project_root" != "__none__" ]] && case "$gap" in "$project_root"/*) return 0 ;; esac
+      local IFS=:
+      for r in $GUARD_ALLOWED_EXTRA; do
+        [[ -n "$r" ]] && case "$gap" in "${r%/}"/*) return 0 ;; esac
+      done
+      return 1 ;;
   esac
   local ap; ap=$(abspath "$op")
   case "$ap" in
@@ -269,14 +306,15 @@ is_allowed_operand() {
   [[ "$project_root" != "__none__" ]] && case "$ap" in "$project_root"/?*) return 0 ;; esac
   local IFS=: root
   for root in $GUARD_ALLOWED_EXTRA; do
-    [[ -n "$root" ]] && case "$ap" in "$root"/?*) return 0 ;; esac
+    [[ -n "$root" ]] && case "$ap" in "${root%/}"/?*) return 0 ;; esac
   done
   return 1
 }
 
 # Detection runs on $scan; operands are enumerated from $cmd_clean (real paths).
 scoped_check() {
-  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n
+  local verb=$1 seg segs listing="" operands=0 outside=0 tok p n skip_next="" toks
+  local re_rbare='^[0-9]*[<>]+$' re_ratt='^[0-9]*[<>]'
   # Enumerate EVERY occurrence of the verb as a WORD (line start or after a
   # separator/space): a flag like docker's --rm is not read as `rm`, and a chained
   # `rm a && rm /etc` has ALL targets checked, not just the first.
@@ -284,8 +322,27 @@ scoped_check() {
   while IFS= read -r seg; do
     [[ -z "$seg" ]] && continue
     seg=${seg#[[:space:];&|(]}
-    for tok in ${seg#${verb} }; do
+    skip_next=""
+    # Split operands by whitespace WITHOUT pathname expansion: `read -ra` does no
+    # globbing. (Plain `for tok in $seg` would expand a glob operand against the
+    # LOCAL filesystem -- non-deterministic, and a hazard: `rm -rf /*` would expand
+    # to the whole tree and find-count it.) Globs are judged by their literal
+    # prefix in is_allowed_operand instead.
+    read -ra toks <<< "${seg#${verb}}"   # strip just the verb; read -ra drops the leading space/tab
+    for tok in "${toks[@]}"; do
+      [[ -n "$skip_next" ]] && { skip_next=""; continue; }   # target of a bare redirection operator
       [[ "$tok" == -* ]] && continue
+      # Shell redirections are not rm operands. A redirection token is an optional
+      # fd number followed by > or < (`>`, `>>`, `2>`, `<`, `<>`, `2>/dev/null`).
+      # Match ONLY that ANCHORED form, never a token that merely CONTAINS > -- an
+      # operand glued to a redirect (`/etc/passwd>/dev/null`, which bash still
+      # deletes) must fall through and be range-checked, not skipped. A bare
+      # operator takes the next token as its target; one with the target attached
+      # is self-contained. (`&>` / `>&` contain `&` and are already cut from the
+      # segment by the [^;&|]* match, so they never reach here.)
+      if   [[ "$tok" =~ $re_rbare ]]; then skip_next=1; continue
+      elif [[ "$tok" =~ $re_ratt  ]]; then continue
+      fi
       p=${tok%\"}; p=${p#\"}; p=${p%\'}; p=${p#\'}
       operands=$((operands + 1))
       if is_allowed_operand "$p"; then

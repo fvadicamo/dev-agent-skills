@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-06-20
+
+### Changed
+
+#### guardrails plugin
+- rm/rmdir scope: a directory-anchored glob whose literal prefix resolves inside an allowed root (e.g. `rm -f /tmp/probe*.py`, or a path under `$GUARD_ALLOWED_EXTRA`) now runs silently. A glob metacharacter never matches `/` and `..` is rejected first, so every match is confined under that literal prefix; the verdict is now deterministic instead of depending on whether the glob happens to match files on the host running the hook. A bare glob with no directory part (`*.o`) has no anchor and still prompts, and a glob anchored outside every allowed root still prompts.
+
+### Fixed
+
+#### guardrails plugin
+- rm/rmdir operand enumeration no longer performs local pathname expansion (`set -f`). Previously a glob operand was expanded against the local filesystem, which was non-deterministic and a hazard: `rm -rf /*` expanded to the entire tree and `find`-counted each entry, hanging the hook. Globs are now judged by their literal prefix (see above) without touching the filesystem.
+- Shell redirections on the rm/rmdir line (`2>/dev/null`, `> file`, `2>&1`) are no longer mistaken for rm operands. This removes a false confirmation when a redirection target resolved outside the workspace (e.g. `rm -f /tmp/x > /var/log/out` treated `/var/log/out` as a deletion target).
+- A project root or `$GUARD_ALLOWED_EXTRA` entry with a trailing slash (e.g. `/srv/scratch/`) is now matched correctly; the trailing slash previously produced a `//` in the match pattern so in-scope deletions under that root prompted. (From code review.)
+- The special-variable substitution resolves `$PPID`/`$BASHPID`/`$RANDOM` before `$$`/`$!`, so an adjacency like `/tmp/x_$PPID$$.log` now fully resolves instead of leaving a stray `$` that prompted. (Two adjacent *named* vars remain a rare residual; `\b` is intentionally not used as it is unsupported by BSD/macOS sed.) (From code review.)
+- `renorm` starts from the un-normalized command, so an already-stable command (no nested interpreters, the common case) costs a single `transform` pass instead of two; also uses a regular loop variable instead of the special `_`. (From code review.)
+
 ## [1.7.3] - 2026-06-19
 
 ### Fixed
