@@ -1,0 +1,36 @@
+# Local privacy denylist, template.
+#
+# Copy to .local/privacy-denylist.txt in the target repo and replace every
+# placeholder below with your own tokens. THIS FILE IS GITIGNORED once copied:
+# never commit the filled version, publishing it would reveal exactly what it
+# is meant to protect.
+#
+# Format: one extended-regex pattern per line, '#' starts a comment. Matching is
+# case-insensitive, done by scripts/check_privacy.sh against staged files.
+#
+# WARNING: every line below is commented out, so this file as shipped matches
+# nothing and the hook stays a silent no-op. Uncomment and edit what applies to
+# you, then verify the guard is armed (see the skill's setup step 6).
+
+# Internal node hostnames
+# \bmy-workstation\b
+# \bvps-[a-z0-9]+\b
+
+# Internal projects and service instances
+# \bproject-codename\b
+
+# Local usernames, personal identities and domains
+# \blocaluser\b
+# \bfirstname\.lastname@company\.tld\b
+# \bmy-personal-domain\.tld\b
+
+# Absolute paths of home directories and internal mounts
+# /home/localuser\b
+# /Users/localuser\b
+# /srv/internal-mount\b
+
+# Private network and VPN address space
+# Tailscale CGNAT range 100.64.0.0/10
+# \b100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}\b
+# LAN range, adjust to yours
+# \b192\.168\.1\.[0-9]{1,3}\b
