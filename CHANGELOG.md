@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-07-27
+
+### Added
+
+#### privacy-guard plugin (new)
+- New plugin with the `privacy-guard` skill: keeps private infrastructure details (node hostnames, internal project names, local usernames and personal emails, absolute home paths, private and VPN IP ranges) out of public repositories. It has two legs: behavioral rules for the session (the repo is the boundary, and the user naming an internal host in conversation does not authorize writing it into the repo) and a per-repo technical gate.
+- The gate is `references/check_privacy.sh`, a pre-commit script that greps staged files against `.local/privacy-denylist.txt` (one case-insensitive extended-regex pattern per line) and blocks the commit on a match, printing the offending lines. The denylist stays gitignored, because publishing it would reveal the very tokens it protects: the hook is therefore a deliberate no-op for external contributors and in CI, where gitleaks still covers generic secrets. `references/pre-commit-snippet.yaml` wires both hooks up.
+- `references/denylist-template.txt` is a placeholder-only starting point; every line ships commented out, so a copy that was never filled in matches nothing. The skill's setup ends with an explicit arming check for exactly that reason.
+
 ## [1.7.4] - 2026-06-20
 
 ### Changed

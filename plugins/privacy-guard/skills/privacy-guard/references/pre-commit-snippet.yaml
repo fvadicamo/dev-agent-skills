@@ -1,0 +1,18 @@
+# Blocks to add to the target public repo's .pre-commit-config.yaml.
+# gitleaks: generic secret scanning, runs for external contributors and in CI too.
+# privacy-denylist: local guard, a no-op when .local/privacy-denylist.txt is missing.
+# Update the gitleaks rev with: pre-commit autoupdate --repo https://github.com/gitleaks/gitleaks
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: privacy-denylist
+        name: privacy denylist
+        entry: scripts/check_privacy.sh
+        language: script
+        exclude: ^\.local/

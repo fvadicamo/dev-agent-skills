@@ -1,6 +1,6 @@
 # dev-agent-skills
 
-Agent skills and hooks for development workflows - Git, GitHub, skill authoring, and safety guardrails.
+Agent skills and hooks for development workflows - Git, GitHub, skill authoring, safety guardrails, and public-repo privacy.
 
 These skills are designed for [Claude Code](https://claude.com/claude-code), the CLI tool by Anthropic.
 
@@ -31,6 +31,7 @@ There are no official Anthropic skills for Git/GitHub workflows. This plugin fil
 /plugin install github-workflow@dev-agent-skills
 /plugin install skill-authoring@dev-agent-skills
 /plugin install guardrails@dev-agent-skills
+/plugin install privacy-guard@dev-agent-skills
 ```
 
 ## How skills work
@@ -42,6 +43,7 @@ Skills are **model-invoked** - Claude automatically activates them based on your
 - "Merge the PR" -> activates `github-pr-merge`
 - "Address review comments" -> activates `github-pr-review`
 - "Help me create a skill" -> activates `creating-skills`
+- "Set up the privacy guard on this public repo" -> activates `privacy-guard`
 
 ## Plugin: github-workflow
 
@@ -167,6 +169,26 @@ Safety guardrails for running Claude Code with reduced supervision (for example 
 | `git reset --hard`, `dd`, `mkfs`, `shred` run unguarded | Prompts for confirmation before each |
 
 The hook is harness-only - it adds no token cost to the model context.
+
+## Plugin: privacy-guard
+
+For people who run private infrastructure (a home lab, a VPS fleet, client machines) and also publish open-source repos. The public repo is the boundary: hostnames, internal project names, local usernames, home paths and VPN addresses must not cross it, in files or anywhere else.
+
+### privacy-guard
+
+**What it adds over Claude's default behavior:**
+
+| Without this skill | With this skill |
+|--------------------|-----------------|
+| Internal hostnames and paths slip into docs and examples | An explicit threat model of what is sensitive and what is fine to publish |
+| Mentioning an internal host in chat leads Claude to write it into the repo | The conversation is private, the repo is not: naming a host does not authorize committing it |
+| Only files get checked | Commit messages, branch names, PR and issue bodies, CHANGELOG and release artifacts are in scope too |
+| Nothing catches a leak before it is pushed | A pre-commit gate greps staged files against a local denylist and blocks the commit, printing the matched lines |
+| A shared denylist would publish the very tokens it protects | The denylist lives in gitignored `.local/`, so it stays private and the hook is a no-op for external contributors and CI, where gitleaks still covers generic secrets |
+
+Setup is per-repo and scripted by the skill: copy `check_privacy.sh` into `scripts/`, fill `.local/privacy-denylist.txt` from the shipped placeholder template, add the gitleaks + denylist blocks to `.pre-commit-config.yaml`, then arm-check it with a throwaway file containing a known token.
+
+Note the deliberate trade-off: the guard is client-side and only protects commits made from a machine that has the denylist. It does not cover pastes into the GitHub web UI. That is what the behavioral rules are for.
 
 ## Development
 

@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A collection of Claude Code agent skills and hooks for development workflows, distributed as a plugin marketplace. Contains 5 skills and 1 hook organized into 3 plugins:
+A collection of Claude Code agent skills and hooks for development workflows, distributed as a plugin marketplace. Contains 6 skills and 1 hook organized into 4 plugins:
 
 - **github-workflow** plugin: `git-commit`, `github-pr-creation`, `github-pr-merge`, `github-pr-review`
 - **skill-authoring** plugin: `creating-skills`
 - **guardrails** plugin: `guard-destructive` PreToolUse hook
+- **privacy-guard** plugin: `privacy-guard` skill (session rules + pre-commit denylist gate for public repos)
 
 Skills are model-invoked (Claude activates them based on user intent, not slash commands). The hook runs automatically on every Bash tool call.
 
