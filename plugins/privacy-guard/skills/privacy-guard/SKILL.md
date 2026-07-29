@@ -73,6 +73,32 @@ Design property: the denylist is NOT committed, because publishing the list woul
 very tokens it protects. As a consequence the hook is a no-op for external contributors and
 in CI. Generic secrets (keys, tokens) stay covered by gitleaks, which runs everywhere.
 
+### Variant: repos with versioned git hooks
+
+If the target repo sets `core.hooksPath` (a shared `.githooks/` directory committed to the
+repo), `pre-commit install` refuses to run, by design: *"Cowardly refusing to install hooks
+with `core.hooksPath` set"*. Do not unset it to make room for the framework, that would
+disable the hooks the repo already relies on. Instead, replace steps 4 and 5 with a call to
+`check_privacy.sh` from the existing hook, over the staged file list:
+
+```sh
+files=()
+while IFS= read -r -d '' f; do files+=("$f"); done \
+    < <(git diff --cached --name-only -z --diff-filter=d)
+if [ ${#files[@]} -gt 0 ]; then
+    bash scripts/check_privacy.sh "${files[@]}" || exit 1
+fi
+```
+
+The `-z`/`read -d ''` pair keeps filenames with spaces intact, and `|| exit 1` is what makes
+the hook actually block: swallowing the script's exit code leaves a guard that reports and
+lets the commit through anyway.
+
+Two consequences worth stating to the user. Without the framework nothing invokes gitleaks
+per commit, so run it in CI instead. And without the framework's stash step the check reads
+the working tree rather than the staged blobs, so a token living only in an unstaged edit is
+still reported: it errs toward noticing, which is the right direction for a guard.
+
 ## Denylist maintenance (`update-denylist`)
 
 When a new sensitive token appears (a new node, a new instance, a new domain):

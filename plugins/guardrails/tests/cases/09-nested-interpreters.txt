@@ -19,7 +19,7 @@ ASK ::: - ::: ssh host 'bash -lc "rm -rf /opt/x; echo done"'
 ASK ::: - ::: ssh host 'bash -lc "echo hi; rm -rf /etc/foo"'
 # --- no false positive from the fix: nested temp / extra-root cleanup stays silent ---
 SILENT ::: - ::: ssh host 'bash -lc "rm -rf /tmp/build"'
-SILENT ::: /srv/oc-rene-dev/.openclaw ::: ssh host 'bash -lc "rm -rf /srv/oc-rene-dev/.openclaw/sub"'
+SILENT ::: /srv/myapp/.openclaw ::: ssh host 'bash -lc "rm -rf /srv/myapp/.openclaw/sub"'
 # --- benign nested command: nothing destructive, no prompt ---
 SILENT ::: - ::: ssh host 'bash -lc "echo hello world"'
 # Known limit (unchanged): a backslash-ESCAPED inner quote (e.g. a third nesting

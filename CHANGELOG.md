@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-07-28
+
+### Added
+
+#### repo
+- `.githooks/pre-commit` now runs the privacy denylist check on the staged files before the guardrails suite, so this repo is covered by the guard it ships. The check is a no-op without `.local/privacy-denylist.txt`, which is the case for every external contributor. The canonical script lives here already, with the privacy-guard skill, so the hook calls it in place instead of duplicating it into `scripts/`.
+
+### Security
+
+#### guardrails plugin
+- Test fixtures no longer carry a real local username or a real internal instance name; both were replaced with neutral placeholders (`deploy`, `myapp`) across four case files. In those cases the string is an arbitrary operand (an argument to `su`/`runuser`, a path under `/srv`), so no verdict changes and the suite stays at 179 PASS. They surfaced by running this repo's own privacy guard over its tracked files, which is the point of shipping one. Git history still holds them: for a username and a dev instance name, that is a deliberate trade against rewriting a public repo's history and breaking every existing clone.
+
+### Changed
+
+#### privacy-guard plugin
+- `check_privacy.sh` warns on stderr when it is handed arguments but none of them resolves to a readable file, instead of exiting 0 in silence. That silence is indistinguishable from a clean run, and it misled the author of this very changelog entry: an unquoted variable under zsh (which does not word-split variable expansions) arrives as one long argument, matching no file, and the script reported nothing. Behavior under pre-commit, where filenames arrive correctly, is unchanged.
+- The skill's setup gains the case this repo actually hit: when the target repo sets `core.hooksPath`, `pre-commit install` refuses to run by design (pre-commit 4.6.0, `install_uninstall.py:125`, "Cowardly refusing to install hooks with `core.hooksPath` set"). Unsetting it to make room for the framework would disable the hooks the repo relies on, so the documented answer is to call `check_privacy.sh` from the existing hook over the staged list, run gitleaks in CI instead of per commit, and accept that without the framework's stash step the check reads the working tree rather than the staged blobs. The snippet keeps `|| exit 1`: swallowing the exit code leaves a guard that reports and lets the commit through anyway.
+
 ## [1.8.0] - 2026-07-27
 
 ### Added
