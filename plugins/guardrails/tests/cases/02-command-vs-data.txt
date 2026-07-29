@@ -1,9 +1,9 @@
 # Adversarial, expectations for v1.6.1. A FAIL = a real gap.
 # --- interpreter-wrapped: now recognized ---
 BLOCK ::: - ::: su -c 'rm -rf /'
-BLOCK ::: - ::: su fr4 -c 'rm -rf /'
+BLOCK ::: - ::: su deploy -c 'rm -rf /'
 BLOCK ::: - ::: doas -c 'rm -rf /'
-BLOCK ::: - ::: runuser -u fr4 -c 'rm -rf /'
+BLOCK ::: - ::: runuser -u deploy -c 'rm -rf /'
 BLOCK ::: - ::: $SHELL -c 'rm -rf /'
 BLOCK ::: - ::: timeout 5 sh -c 'rm -rf /'
 BLOCK ::: - ::: nohup bash -c 'rm -rf /'

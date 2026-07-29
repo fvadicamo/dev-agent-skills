@@ -12,6 +12,6 @@ BLOCK ::: - ::: docker run --rm -v x:y img sh -c 'rm -rf /'
 BLOCK ::: - ::: docker volume rm myvol
 BLOCK ::: - ::: docker rm -v cont
 # --- regression: the remote/EXTRA mechanism behind Fix 1 (rene-agent) ---
-ASK ::: - ::: ssh host 'rm -f /srv/oc-rene-dev/.openclaw/x.bak'
-SILENT ::: /srv/oc-rene-dev/.openclaw ::: ssh host 'rm -f /srv/oc-rene-dev/.openclaw/x.bak'
-BLOCK ::: /srv/oc-rene-dev/.openclaw ::: ssh host 'rm -rf /'
+ASK ::: - ::: ssh host 'rm -f /srv/myapp/.openclaw/x.bak'
+SILENT ::: /srv/myapp/.openclaw ::: ssh host 'rm -f /srv/myapp/.openclaw/x.bak'
+BLOCK ::: /srv/myapp/.openclaw ::: ssh host 'rm -rf /'

@@ -1,7 +1,7 @@
 {
   "name": "privacy-guard",
   "description": "Keeps private infrastructure details out of public repositories. Ships the privacy-guard skill: session rules for what must never cross the public boundary, plus a per-repo pre-commit gate built on a gitignored local denylist and gitleaks. The denylist is never committed, so the hook is a no-op for external contributors and in CI while gitleaks still covers generic secrets.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": {
     "name": "Francesco Vadicamo",
     "email": "fvadicamo@gmail.com"

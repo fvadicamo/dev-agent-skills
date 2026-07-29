@@ -10,11 +10,11 @@ SILENT ::: - ::: rm -rf /tmp/run-*/cache
 SILENT ::: - ::: rm -f /var/tmp/session-?.log
 SILENT ::: - ::: rm -f /tmp/a-[0-9].tmp
 # --- glob under GUARD_ALLOWED_EXTRA: silent ---
-SILENT ::: /srv/oc-rene-dev/.openclaw ::: rm -f /srv/oc-rene-dev/.openclaw/telegram-inbound/news-inbound-*.jsonl
+SILENT ::: /srv/myapp/.openclaw ::: rm -f /srv/myapp/.openclaw/telegram-inbound/news-inbound-*.jsonl
 # --- glob OUTSIDE every allowed root: still prompts ---
 ASK ::: - ::: rm -f /etc/*.conf
 ASK ::: - ::: rm -rf /var/lib/*
-ASK ::: /srv/oc-rene-dev/.openclaw ::: rm -f /srv/other/*.jsonl
+ASK ::: /srv/myapp/.openclaw ::: rm -f /srv/other/*.jsonl
 # --- BARE glob with no directory anchor: still prompts ---
 ASK ::: - ::: rm *.o
 ASK ::: - ::: rm -f *.tmp
