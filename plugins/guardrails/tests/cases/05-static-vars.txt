@@ -8,7 +8,7 @@ SILENT ::: - ::: D=/tmp/x; rm -rf "${D}"
 SILENT ::: - ::: D="/tmp/x"; rm -rf "$D"
 # --- static literal under project root / EXTRA root -> silent ---
 SILENT ::: - ::: D=nodes; rm -rf "$D"
-SILENT ::: /mnt/scratch ::: S=/mnt/scratch/x; rm -rf "$S"
+SILENT ::: /srv/scratch ::: S=/srv/scratch/x; rm -rf "$S"
 # --- static literal OUTSIDE the workspace -> must still prompt ---
 ASK ::: - ::: ROOT=/etc; rm -rf "$ROOT"
 ASK ::: - ::: D=/var/www; rm -rf "$D/html"

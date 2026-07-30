@@ -28,11 +28,11 @@ SILENT ::: - ::: rm README.md
 SILENT ::: - ::: rmdir nodes
 SILENT ::: - ::: ls -la
 SILENT ::: - ::: eval "rm -rf /tmp/junk"
-SILENT ::: /mnt/scratch ::: rm -rf /mnt/scratch/x
+SILENT ::: /srv/scratch ::: rm -rf /srv/scratch/x
 ASK ::: - ::: rm /etc/hosts
 ASK ::: - ::: rm ~/Documents/x
 ASK ::: - ::: rm *.o
-ASK ::: - ::: rm -rf /mnt/scratch/x
+ASK ::: - ::: rm -rf /srv/scratch/x
 ASK ::: - ::: git reset --hard
 ASK ::: - ::: dd if=/dev/zero of=/tmp/x
 ASK ::: - ::: ssh host 'rm /var/www/data'
