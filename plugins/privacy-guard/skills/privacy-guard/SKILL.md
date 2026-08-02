@@ -144,9 +144,18 @@ that reaches anyone else.
 ## Known limits
 
 - The guard is client-side: it protects commits made from a node that has the denylist.
-- `check-sync.sh` compares against the copy shipped with *this* plugin checkout. On a node
-  whose plugin cache is stale, it will confidently report copies as current against an old
-  canonical. Update the marketplace before trusting a clean run.
+- `check-sync.sh` compares against the copy shipped with *this* plugin checkout, and there
+  are **three** copies in play that do not align on their own: the source repo, the
+  marketplace clone, and the installed plugin under
+  `~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`. On a node whose plugin cache
+  is stale it will confidently report repos as current against an old canonical. Measured
+  on two nodes: the marketplace clone was five days and 28 commits behind while the
+  installed plugin was two minor versions back. Refresh both before trusting a clean run:
+
+  ```sh
+  claude plugin marketplace update <marketplace>
+  claude plugin update <plugin>@<marketplace>    # restart to apply
+  ```
 - It scans the lines a commit ADDS, not whole files: a token already committed keeps
   passing until someone removes it. That is deliberate (scanning whole files wedged every
   later edit to a file that legitimately names its own denylist tokens, and left
