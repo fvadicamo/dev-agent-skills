@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Privacy guard: block commits containing tokens from a local denylist.
 #
+# check_privacy.sh 1.1.1 -- canonical copy: privacy-guard skill (dev-agent-skills),
+# references/check_privacy.sh. This file in a repo is a COPY: fix it upstream and recopy,
+# or the next sync silently reverts your change. The version line is what lets a copy know
+# it is behind; without it a divergence is invisible until it bites.
+#
 # The denylist lives OUTSIDE version control (.local/privacy-denylist.txt)
 # because publishing the list would defeat its purpose. When the file does
 # not exist (e.g. for external contributors or CI), the check is a no-op.
 #
 # Denylist format: one extended-regex pattern per line, '#' starts a comment.
 # Matching is case-insensitive. Override the path with PRIVACY_DENYLIST.
+# Exit codes: 0 clean, 1 denylisted content found, 2 usage error.
 #
 # Scans ONLY the lines a commit ADDS, never the whole file. A pre-commit guard's job
 # is to stop NEW leaks; a token already sitting in a committed line is already in the
@@ -23,6 +29,15 @@
 set -euo pipefail
 
 DENYLIST="${PRIVACY_DENYLIST:-.local/privacy-denylist.txt}"
+
+# Before the no-op below, not after: a repo without a denylist would otherwise exit 0 on a
+# usage error too. With no arguments the script used to exit 0 in silence, which reads as
+# "clean" over zero files checked -- the one verdict the note further down says it must
+# never fake.
+if [ "$#" -eq 0 ]; then
+    echo "Usage: $0 FILE..." >&2
+    exit 2
+fi
 
 [ -f "$DENYLIST" ] || exit 0
 

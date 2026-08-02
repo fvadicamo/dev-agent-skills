@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-08-03
+
+### Fixed
+
+#### privacy-guard plugin
+- `check_privacy.sh` called with **no arguments** exited 0 in silence: a "clean" verdict over
+  zero files checked, which is the one thing the script's own comment says it must never
+  fake. It now prints a usage line and exits 2, and the exit codes are documented in the
+  header. The guard is placed before the "no denylist, no-op" early exit, so a repo without a
+  denylist still reports the usage error instead of swallowing it. The check came from a
+  materialized copy that had grown it locally: it is upstream now, so that copy stops being a
+  variant.
+
+### Added
+
+#### privacy-guard plugin
+- `check_privacy.sh` carries its **version and provenance** in the header. A materialized copy
+  had been a month behind with no way for anyone to notice, because nothing in the file said
+  where it came from or which version it was. The line also states the rule that keeps copies
+  from drifting: fix upstream and recopy, never edit the copy.
+
 ## [1.9.0] - 2026-08-03
 
 ### Changed
