@@ -95,9 +95,12 @@ the hook actually block: swallowing the script's exit code leaves a guard that r
 lets the commit through anyway.
 
 Two consequences worth stating to the user. Without the framework nothing invokes gitleaks
-per commit, so run it in CI instead. And without the framework's stash step the check reads
-the working tree rather than the staged blobs, so a token living only in an unstaged edit is
-still reported: it errs toward noticing, which is the right direction for a guard.
+per commit, so run it in CI instead. And the framework's stash step no longer changes what
+this check sees: it reads `git diff --cached`, so it looks at the staged blobs either way.
+The flip side is a real loss and should be said out loud: a token living only in an unstaged
+edit is no longer reported, where the old whole-file form did notice it. It is not being
+committed, so a pre-commit guard staying quiet about it is defensible, but it is a narrower
+net than before.
 
 ## Denylist maintenance (`update-denylist`)
 
@@ -108,6 +111,11 @@ When a new sensitive token appears (a new node, a new instance, a new domain):
 ## Known limits
 
 - The guard is client-side: it protects commits made from a node that has the denylist.
+- It scans the lines a commit ADDS, not whole files: a token already committed keeps
+  passing until someone removes it. That is deliberate (scanning whole files wedged every
+  later edit to a file that legitimately names its own denylist tokens, and left
+  `--no-verify` as the only exit), but it means the guard stops NEW leaks and does not
+  audit history. For an audit, grep the tracked tree against the denylist by hand.
 - It does not cover manual pastes into the GitHub web UI. Only the behavioral rules do.
 - Word-boundary patterns (`\bfoo\b`) can produce false positives inside hashes and IDs. The
   hook prints the matched lines, so judge case by case.

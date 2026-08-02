@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-08-03
+
+### Changed
+
+#### privacy-guard plugin
+- `check_privacy.sh` scans the lines a commit **adds** (`git diff --cached -U0`, `+` lines
+  only) instead of the whole staged file. Scanning whole files does not stop new leaks, it
+  stops maintenance: a repo whose documentation legitimately names the tokens its own
+  denylist protects becomes unmodifiable, and the only exit the message offers is
+  `--no-verify`, which is how a guard stops guarding while staying installed. Measured on a
+  private repo where an unrelated paragraph added to a docs file failed the commit citing
+  four lines that had been committed for weeks. The two sibling guards in this ecosystem
+  already scanned added lines only; this was the one left behind.
+- Matches now carry the **real** line number in the file. `grep -n` over a diff numbers the
+  lines of the diff, not of the file, so the fix reads them from the hunk headers: a guard
+  whose output points at the wrong line sends whoever reads it to look in the wrong place.
+- The "nothing was checked" warning now covers being run by hand outside a commit, where
+  there is nothing staged to look at. Worth knowing because it is the natural way to verify
+  this script and get a meaningless pass: run from a directory where the denylist does not
+  resolve, the check is a no-op that answers "clean".
+
+### Migration
+
+- If you materialized `scripts/check_privacy.sh` into a repo, recopy it from
+  `plugins/privacy-guard/skills/privacy-guard/references/`. Without that, nothing breaks
+  today, but that repo keeps the whole-file behaviour and will wedge on the first file that
+  carries one of its own tokens.
+- One behaviour is genuinely narrower: a token living only in an **unstaged** edit is no
+  longer reported. It is not being committed, and under the pre-commit framework the stash
+  step made this moot anyway, but repos on the `core.hooksPath` variant were getting that
+  extra reach for free and now are not.
+
 ## [1.8.1] - 2026-07-28
 
 ### Added
