@@ -58,6 +58,8 @@ seed you propagate from. Never commit the filled version to a public repo.
 From the root of the target repo:
 
 1. Copy `references/check_privacy.sh` to `scripts/check_privacy.sh` and make it executable.
+   It stays a **copy**: fix it here and recopy, never edit it there. See *Keeping copies
+   current* below for why that rule needs a check behind it.
 2. Create `.local/privacy-denylist.txt` from your private seed (or from
    `references/denylist-template.txt` on a first run), adapting the patterns to this repo's
    context.
@@ -108,9 +110,43 @@ When a new sensitive token appears (a new node, a new instance, a new domain):
 1. update your private seed, the single source of truth;
 2. propagate it to the `.local/privacy-denylist.txt` of every public repo active on the node.
 
+## Keeping copies current (`check-sync.sh`)
+
+`check_privacy.sh` is copied into each repo on purpose: the repo must stand on its own for
+external contributors and CI, which do not have this plugin installed. The price of copying
+is drift, and drift here is **invisible** — a copy a month behind looks exactly like a
+current one. Observed: one copy had been missing a fix for a month while also carrying a
+local improvement nobody had brought upstream, and nothing could have surfaced either.
+
+Two things make it visible. Each copy carries its **version and provenance** in the header,
+so a copy can be placed. And:
+
+```sh
+references/check-sync.sh REPO...     # 0 all current, 1 any divergence, 2 usage
+```
+
+It asks **git** which copies a repo ships (`ls-files`), not the filesystem and not a
+hardcoded path: that answers the real question ("what does this repo distribute") and it
+answers it wherever the copy lives. Four verdicts, and the last is the one that matters:
+
+- `OK` — byte-identical to the canonical copy.
+- `BEHIND` — older version, or no version line at all (a copy predating the line itself).
+- `DIVERGED` — **same version, different content**. The worst case, because the version
+  claims to be current and is not. Take the change upstream and recopy; leave it, and the
+  next sync reverts it in silence.
+- `NONE` — the repo ships no copy. Said out loud rather than passed over, because silence
+  would read as "current".
+
+Run it when you touch this skill, and when a repo's guard behaves unlike the documentation.
+It compares only what a repo *ships*; a copy that exists but is untracked is not the guard
+that reaches anyone else.
+
 ## Known limits
 
 - The guard is client-side: it protects commits made from a node that has the denylist.
+- `check-sync.sh` compares against the copy shipped with *this* plugin checkout. On a node
+  whose plugin cache is stale, it will confidently report copies as current against an old
+  canonical. Update the marketplace before trusting a clean run.
 - It scans the lines a commit ADDS, not whole files: a token already committed keeps
   passing until someone removes it. That is deliberate (scanning whole files wedged every
   later edit to a file that legitimately names its own denylist tokens, and left

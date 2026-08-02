@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-08-03
+
+### Added
+
+#### privacy-guard plugin
+- `references/check-sync.sh REPO...` reports whether a repo's materialized copies of
+  `check_privacy.sh` are current with this skill. Copying is deliberate (the repo has to work
+  for contributors who do not have the plugin), and the price of copying is drift that nobody
+  can see: a copy a month behind is indistinguishable from a current one. The version line
+  added in 1.1.1 gives the comparison something to hold on to; this gives it a command.
+- Copies are asked to **git** (`ls-files`), not to the filesystem and not to a hardcoded
+  `scripts/` path: the question is "what does this repo ship", and asking git answers it
+  wherever the copy lives. The hand-written list of repos that were believed to hold a copy
+  had already missed one.
+- Four verdicts, and `DIVERGED` (same version, different content) is the one worth having:
+  the version claims to be current while the content is not, so the change must go upstream
+  or the next sync reverts it in silence. `NONE` is reported rather than passed over, because
+  silence would read as "current".
+
 ## [1.9.1] - 2026-08-03
 
 ### Fixed
