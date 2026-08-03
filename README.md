@@ -183,33 +183,43 @@ For people who run private infrastructure (a home lab, a VPS fleet, client machi
 | Internal hostnames and paths slip into docs and examples | An explicit threat model of what is sensitive and what is fine to publish |
 | Mentioning an internal host in chat leads Claude to write it into the repo | The conversation is private, the repo is not: naming a host does not authorize committing it |
 | Only files get checked | Commit messages, branch names, PR and issue bodies, CHANGELOG and release artifacts are in scope too |
-| Nothing catches a leak before it is pushed | A pre-commit gate greps staged files against a local denylist and blocks the commit, printing the matched lines |
+| Nothing catches a leak before it is pushed | A pre-commit gate greps the lines a commit **adds** against a local denylist and blocks it, printing the matched lines with their real line numbers |
 | A shared denylist would publish the very tokens it protects | The denylist lives in gitignored `.local/`, so it stays private and the hook is a no-op for external contributors and CI, where gitleaks still covers generic secrets |
+| A script copied into each repo drifts invisibly | Each copy carries its version and provenance, and `check-sync.sh REPO...` reports which copies are behind, diverged, or missing |
 
-Setup is per-repo and scripted by the skill: copy `check_privacy.sh` into `scripts/`, fill `.local/privacy-denylist.txt` from the shipped placeholder template, add the gitleaks + denylist blocks to `.pre-commit-config.yaml`, then arm-check it with a throwaway file containing a known token.
+Setup is per-repo and scripted by the skill: copy `check_privacy.sh` into `scripts/`, fill `.local/privacy-denylist.txt` from the shipped placeholder template, add the gitleaks + denylist blocks to `.pre-commit-config.yaml`, then arm-check it with a throwaway file containing a known token. A repo that already sets `core.hooksPath` cannot run `pre-commit install`; the skill documents the variant that calls the script from the existing hook instead.
 
-Note the deliberate trade-off: the guard is client-side and only protects commits made from a machine that has the denylist. It does not cover pastes into the GitHub web UI. That is what the behavioral rules are for.
+Note the deliberate trade-offs: the guard is client-side and only protects commits made from a machine that has the denylist; it scans what a commit adds, so it stops new leaks and does not audit history; and it does not cover pastes into the GitHub web UI. That is what the behavioral rules are for.
 
 ## Development
 
-The `guardrails` hook ships with a regression suite. After cloning the repo to work
-on the hook, enable the shared git hooks (they live in the versioned `.githooks/`,
-not in `.git/hooks/`):
+Two plugins ship executable logic, and each has a regression suite:
+
+```sh
+bash plugins/guardrails/tests/run.sh        # guard-destructive.sh
+bash plugins/privacy-guard/tests/run.sh     # check_privacy.sh, check-sync.sh
+```
+
+Both exit non-zero on failure and run on macOS and Linux. Each accepts an override
+(`GUARD_HOOK=`, `PRIVACY_SCRIPT=`, `SYNC_SCRIPT=`) that points it at a candidate script:
+point it at the version from before a fix and the suite must go red. A bench nobody has
+seen fail says nothing.
+
+After cloning the repo to work on either, enable the shared git hooks (they live in the
+versioned `.githooks/`, not in `.git/hooks/`):
 
 ```sh
 git config core.hooksPath .githooks      # one-time, per clone
 ```
 
-With that set, a pre-commit hook runs the suite whenever the hook or its tests are
-staged and blocks the commit on a regression (bypass once with `git commit --no-verify`).
-You can also run it by hand at any time:
+With that set, a pre-commit hook runs a plugin's suite whenever that plugin's shipped
+files or its tests are staged, and blocks the commit on a regression (bypass once with
+`git commit --no-verify`). It also runs this repo's own privacy check on the staged
+lines. There is no CI: that hook is the only gate, and it only fires for whoever set
+`core.hooksPath`.
 
-```sh
-bash plugins/guardrails/tests/run.sh
-```
-
-See `plugins/guardrails/tests/README.md` for the case format and `CLAUDE.md` for
-contributor guidance.
+See each suite's `tests/README.md` for the case format and `CLAUDE.md` for contributor
+guidance.
 
 ## License
 

@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] - 2026-08-03
+
+### Fixed
+
+#### repo
+- `README.md` still described a single regression suite and a pre-commit tied to
+  `guardrails`. `CLAUDE.md` had been corrected in 1.11.0 and the README had not, so the
+  file an external contributor reads first was the one still wrong. It now names both
+  suites, the candidate overrides that make them provable, and states out loud that there
+  is no CI.
+- The privacy-guard section claimed the gate greps **staged files**. True until 1.9.0,
+  false since: it greps the lines a commit adds. The same row also omitted `check-sync.sh`
+  and the `core.hooksPath` variant, both shipped, so the README undersold the plugin while
+  misdescribing it.
+- The architecture tree in `CLAUDE.md` annotated `tests/` as belonging to `guardrails` and
+  listed `cases/*.txt` as if every suite used that format. Two plugins have a suite and
+  only one uses a case table.
+
 ## [1.11.0] - 2026-08-03
 
 ### Added

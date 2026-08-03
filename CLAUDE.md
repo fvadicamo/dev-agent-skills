@@ -29,9 +29,9 @@ plugins/
     hooks/                  # Hooks (guardrails plugin) - auto-discovered
       hooks.json            # Hook registration
       guard-destructive.sh  # Hook script, run via ${CLAUDE_PLUGIN_ROOT}
-    tests/                  # (guardrails) regression suite - run after hook changes
-      run.sh
-      cases/*.txt
+    tests/                  # regression suite - guardrails and privacy-guard have one
+      run.sh                #   guardrails: cases/*.txt table; privacy-guard: inline
+      cases/*.txt           #   (guardrails only)
 ```
 
 ### Key file: `marketplace.json`
