@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.1] - 2026-08-03
+
+### Fixed
+
+#### repo
+- `check-version-bump.sh` also verifies that a plugin's `marketplace.json` entry advertises
+  the version its `plugin.json` declares. Found by the sweep over 1.12.0, in that release's
+  own diff: adding `version` to every entry created a copy kept by hand, and the only thing
+  guarding it was `claude plugin tag`, which fires when someone tags. Between two tags the
+  pair could drift freely — the same shape as the defect 1.12.0 removed, reintroduced one
+  step to the side.
+- The entry is what the plugin browser reads **before** anything is fetched, so a stale one
+  misinforms precisely the reader who has no way to check. An entry carrying no `version`
+  stays legitimate and is not flagged; three cases pin that boundary.
+- The lookup needs `python3`. When it is absent the check **says** the marketplace-entry
+  half did not run instead of exiting clean, because a check that evaporates in silence
+  reads as a pass.
+
 ## [1.12.0] - 2026-08-03
 
 ### Added

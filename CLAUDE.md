@@ -78,7 +78,10 @@ existed in spirit and was disregarded twice anyway. Its bench is
 The plugin entry's `version` must match its `plugin.json`; `claude plugin tag`
 refuses to tag when they disagree, and says `plugin.json wins at install time`.
 The entry is not redundant: the browser UI renders a version only when the entry
-carries one, and at that point no `plugin.json` has been fetched.
+carries one, and at that point no `plugin.json` has been fetched. The same
+pre-commit check enforces the pair, because the tag gate only fires when someone
+tags, and the entry is a copy kept by hand — the one thing this repo does not
+leave to attention. An entry with no `version` at all stays legitimate.
 
 `metadata.version` follows the `CHANGELOG.md` heading, always.
 

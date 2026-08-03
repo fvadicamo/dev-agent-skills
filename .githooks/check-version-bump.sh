@@ -33,11 +33,51 @@ version_at() {  # $1 = HEAD | index, $2 = plugin name
     esac | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
+# The version a plugin's marketplace entry advertises, or empty if there is no marketplace,
+# no entry, or no version on it (all legitimate). Needs python3 for the lookup by name;
+# when it is missing the check says so rather than passing in silence, because a check that
+# evaporates quietly reads as a pass.
+entry_version() {  # $1 = plugin name
+    command -v python3 >/dev/null 2>&1 || { echo "__nopython__"; return; }
+    git show ":.claude-plugin/marketplace.json" 2>/dev/null | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for e in d.get("plugins", []):
+    if e.get("name") == sys.argv[1] and "version" in e:
+        print(e["version"])
+        break
+' "$1" 2>/dev/null
+}
+
 rc=0
+warned_nopython=0
 for p in $(git diff --cached --name-only -- plugins/ | cut -d/ -f2 | sort -u); do
     [ -n "$p" ] || continue
     old="$(version_at HEAD "$p")"
     new="$(version_at index "$p")"
+
+    # The marketplace entry advertises a version to the browser UI before anything is
+    # fetched, so a stale entry misinforms exactly the reader who cannot check. `claude
+    # plugin tag` refuses on a mismatch, but only at tag time: without this, the pair can
+    # drift for as long as nobody tags.
+    if [ -n "$new" ]; then
+        ev="$(entry_version "$p")"
+        if [ "$ev" = "__nopython__" ]; then
+            [ "$warned_nopython" -eq 0 ] && {
+                echo "pre-commit: python3 not found - the marketplace-entry check did NOT run." >&2
+                warned_nopython=1
+            }
+        elif [ -n "$ev" ] && [ "$ev" != "$new" ]; then
+            echo "pre-commit: plugins/$p is $new but its marketplace.json entry says $ev." >&2
+            echo "  plugin.json wins at install time, so the entry misinforms the plugin" >&2
+            echo "  browser, which is the only place that version is read before a fetch." >&2
+            echo "  Set the entry to $new." >&2
+            rc=1
+        fi
+    fi
 
     # No version in HEAD: the plugin is being added, there is nothing to bump from.
     # No version in the index: the plugin is being removed.

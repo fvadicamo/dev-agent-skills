@@ -22,10 +22,11 @@ work="$(mktemp -d)" || exit 2
 trap 'rm -rf "$work"' EXIT
 
 # Builds a repo with plugin `foo` at $1, committed, then leaves it as $PWD.
+# $2, when given, is the version its marketplace entry advertises.
 scaffold() {
-    local ver="$1" dir
+    local ver="$1" entry="${2:-}" dir
     dir="$work/case-$((pass + fail))-$RANDOM"
-    mkdir -p "$dir/plugins/foo/.claude-plugin" "$dir/plugins/foo/skills/bar" "$dir/plugins/foo/tests"
+    mkdir -p "$dir/plugins/foo/.claude-plugin" "$dir/plugins/foo/skills/bar" "$dir/plugins/foo/tests" "$dir/.claude-plugin"
     cd "$dir" || return 1
     git init -q .
     git config user.email t@example.invalid; git config user.name t
@@ -33,10 +34,20 @@ scaffold() {
     printf -- '---\nname: bar\ndescription: bench.\n---\nbody\n' > plugins/foo/skills/bar/SKILL.md
     printf 'case\n' > plugins/foo/tests/cases.txt
     printf '# repo\n' > README.md
+    set_entry "$entry"
     git add -A && git -c commit.gpgsign=false commit -qm init
 }
 
 set_version() { printf '{ "name": "foo", "version": "%s" }\n' "$1" > plugins/foo/.claude-plugin/plugin.json; }
+
+# No argument: an entry without a version, which is legitimate and must not be flagged.
+set_entry() {
+    if [ -n "${1:-}" ]; then
+        printf '{ "name": "m", "plugins": [ { "name": "foo", "source": "./plugins/foo", "version": "%s" } ] }\n' "$1"
+    else
+        printf '{ "name": "m", "plugins": [ { "name": "foo", "source": "./plugins/foo" } ] }\n'
+    fi > .claude-plugin/marketplace.json
+}
 
 check() {  # $1 expected exit, $2 label
     local got
@@ -73,6 +84,20 @@ check 0 "a repo-level file changed, no plugin touched"
 scaffold 1.0.0
 set_version 1.0.1 && git add -A
 check 0 "only the version changed, nothing else"
+
+echo "== the marketplace entry must not advertise a version the plugin does not have =="
+
+scaffold 1.2.0 1.2.0
+printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && set_version 1.2.1 && git add -A
+check 1 "plugin bumped to 1.2.1, entry left at 1.2.0"
+
+scaffold 1.2.0 1.2.0
+printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && set_version 1.2.1 && set_entry 1.2.1 && git add -A
+check 0 "both moved together"
+
+scaffold 1.2.0
+printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && set_version 1.2.1 && git add -A
+check 0 "an entry carrying no version at all is legitimate, not a mismatch"
 
 echo "== the lifecycle edges must not block =="
 
