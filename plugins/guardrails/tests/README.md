@@ -50,6 +50,15 @@ Lines starting with `#` and blank lines are ignored.
 | `02-command-vs-data.txt` | the normalized command view: a destructive pattern merely *mentioned* (heredoc, commit message, echo/grep arg, comment) stays inert, while interpreter-wrapped commands (ssh / sh -c / su / eval) are still caught |
 | `03-mktemp.txt` | a variable assigned from a bare `mktemp` in the same command counts as temp (the create-workspace / clean-up idiom), with the conservative guards |
 | `04-mktemp-adversarial.txt` | attacks on the temp-var path: loop/read rebinding, `..` traversal out of a temp dir, lookalikes — must not pass silently |
+| `05-static-vars.txt` | a variable assigned a static literal path in the same command resolves to that path and runs the normal scope check |
+| `06-docker-rm-flag.txt` | `docker run --rm` is the container flag, not the `rm` command: the operand scan anchors on a real `rm`/`rmdir` word |
+| `07-chained-rm.txt` | every `rm`/`rmdir` on the line is checked, not just the first: a chained command whose *later* deletion leaves the workspace still prompts |
+| `08-special-vars.txt` | integer-only special vars (`$$`, `$!`, `$PPID`, `$BASHPID`, `$RANDOM`) expand to a bare number, so they cannot move an in-scope path out of scope |
+| `09-nested-interpreters.txt` | fixpoint normalization: a destructive command inside an inner interpreter quote wrapped by an outer one (`ssh '... bash -lc "rm ..."'`) is still detected |
+| `10-glob-and-redir.txt` | a glob whose literal directory prefix sits under an allowed root is confined there; redirections are not mistaken for `rm` operands |
+
+Keep this table complete when adding a case file. It went six suites out of date once,
+which is how a reader concludes the hook covers less than it does.
 
 ## Overrides (development)
 

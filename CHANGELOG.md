@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The architecture tree in `CLAUDE.md` annotated `tests/` as belonging to `guardrails` and
   listed `cases/*.txt` as if every suite used that format. Two plugins have a suite and
   only one uses a case table.
+- The "Suites" table in `plugins/guardrails/tests/README.md` listed 4 case files out of 10.
+  Six suites added between 1.7.0 and 1.7.4 were never documented there, so the file that
+  explains what the hook is tested for understated the coverage by more than half.
 
 ## [1.11.0] - 2026-08-03
 
