@@ -98,6 +98,29 @@ git -C "$d" add -A; git -C "$d" commit -qm "token committed on a ++ line"
 printf 'first line\n' > "$d/doc.md"; git -C "$d" add doc.md
 ok 0 "$(run "$d" doc.md)" 'removing a token from a ++ line still passes, it is leaving the repo'
 
+echo "== the pattern is matched against the line, not against 'N:line' =="
+# added_lines() prefixes each line with its real number. Handing that text straight to grep
+# made the prefix part of the subject: an anchored pattern could never match (the line now
+# starts with a digit) and the prefix itself became matchable. The anchor is what someone
+# writes to NARROW a pattern -- an absolute path, a slug in column one -- so doing the
+# careful thing bought a pattern that protects nothing, with no signal.
+d=$(repo anchored "^$TOKEN")
+printf 'first line\n%s.example leaked\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+ok 1 "$(run "$d" doc.md)" 'a ^-anchored pattern still matches the start of the FILE line'
+
+d=$(repo anchored-control "$TOKEN")
+printf 'first line\n%s.example leaked\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+ok 1 "$(run "$d" doc.md)" 'control: the same token unanchored blocks, so the bench is not empty'
+
+d=$(repo prefix-not-subject '^[0-9]+:')
+printf 'first line\na perfectly clean added line\n' > "$d/doc.md"; git -C "$d" add doc.md
+ok 0 "$(run "$d" doc.md)" 'a pattern matching the number prefix does not fire on a clean line'
+
+d=$(repo colon-content "$TOKEN")
+printf 'first line\nhttps://host:8443/%s\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+got=$( (cd "$d" && bash "$CHECK" doc.md 2>&1) | grep -c 'https://host:8443')
+ok 1 "$got" 'content carrying its own colons is reported whole, not truncated at the first one'
+
 echo "== usage errors are not a clean verdict over zero files =="
 d=$(repo usage "$TOKEN")
 ok 2 "$(run "$d")" 'no arguments exits 2, not 0 in silence'

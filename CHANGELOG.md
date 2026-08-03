@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.1] - 2026-08-03
+
+### Security
+
+#### privacy-guard plugin
+- `check_privacy.sh` matched patterns against **`N:line`** instead of the line. `added_lines()`
+  prefixes each added line with its real file number, and that text went straight to `grep`,
+  so the prefix became part of the subject. Both directions were wrong, and the first is the
+  one that matters: a pattern anchored with `^` could never match, because the line now
+  started with a digit — the token stayed in the commit and the script exited 0. Specularly, a
+  pattern that can begin with a digit or `:` fired on clean lines.
+- The anchor is what someone writes to **narrow** a pattern (an absolute path, a slug in
+  column one, the start of a URL). Doing the careful thing bought a pattern that protected
+  nothing, with no signal at all. The whole-file form this replaced did not have the problem:
+  it matched the bare line and added `file:line:` to the *output* afterwards, so this is a
+  trap of the newer shape, like the `-` lines already noted in the header.
+- The number is now kept out of grep's input (`cut -d: -f2-`) and stitched back by position
+  (`grep -n` numbering the stream, `awk` returning the full lines). `grep -iE -f` is untouched,
+  so case-insensitivity and the ERE dialect are exactly as before, and the `sed`/`head` below
+  are unchanged.
+- Four regression cases, including the two that make the bench honest: a **control** asserting
+  the same token blocks when unanchored (without it, the failing case could be explained by a
+  broken bench), and a line carrying its own colons (`https://host:8443/...`) reported whole
+  rather than truncated at the first one. Against the 1.2.0 script the suite reports two
+  failures.
+- Reported from a review on a downstream PR that was syncing its copy, and reproduced here
+  before being fixed. Script version 1.2.0 -> **1.2.1**, plugin 1.3.0 -> 1.3.1.
+
+### Migration
+
+- **Recopy `scripts/check_privacy.sh` again** in every repo that ships one: the copies pushed
+  earlier today carry 1.2.0 and this defect.
+
 ## [1.13.0] - 2026-08-03
 
 ### Security

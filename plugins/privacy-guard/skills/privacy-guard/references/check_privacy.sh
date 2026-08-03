@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Privacy guard: block commits containing tokens from a local denylist.
 #
-# check_privacy.sh 1.2.0 -- canonical copy: privacy-guard skill (dev-agent-skills),
+# check_privacy.sh 1.2.1 -- canonical copy: privacy-guard skill (dev-agent-skills),
 # references/check_privacy.sh. This file in a repo is a COPY: fix it upstream and recopy,
 # or the next sync silently reverts your change. The version line is what lets a copy know
 # it is behind; without it a divergence is invisible until it bites.
@@ -75,7 +75,23 @@ for file in "$@"; do
     checked=$((checked + 1))
     # -i case-insensitive, -E extended regex. Binary files never get here: git emits
     # no '+' lines for them, which is what `grep -I` used to take care of.
-    if matches=$(printf '%s\n' "$added" | grep -iE -f "$patterns_file"); then
+    #
+    # The number prefix is kept OUT of what grep matches against. Handing it '42:the line'
+    # made the prefix part of the subject, and that cost both directions: a pattern anchored
+    # with '^' could never match, because the line now started with a digit, and the prefix
+    # itself became matchable, so a pattern that can start with a digit or ':' fired on clean
+    # lines. The first is the one that matters -- '^' is what you write to NARROW a pattern
+    # (an absolute path, a slug in column one), so doing the careful thing bought a pattern
+    # that protected nothing, silently. The whole-file form this replaced did not have the
+    # problem: it matched the bare line and added 'file:line:' to the OUTPUT afterwards.
+    #
+    # `grep -n` numbers the STREAM here, not the file, and that is exactly what is needed:
+    # stream line k is the k-th line of $added, which already carries its real number. awk
+    # then hands back the full 'N:content' lines, so the sed and head below are unchanged.
+    # Matching stays `grep -iE -f`, so case-insensitivity and the ERE dialect are untouched.
+    if hits=$(printf '%s\n' "$added" | cut -d: -f2- | grep -niE -f "$patterns_file"); then
+        matches=$(awk -F: 'NR==FNR { k[$1]; next } FNR in k' \
+            <(printf '%s\n' "$hits") <(printf '%s\n' "$added"))
         echo "Privacy check FAILED:"
         printf '%s\n' "$matches" | sed "s|^|${file}:|" | head -10
         status=1
