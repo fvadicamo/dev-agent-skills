@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.6] - 2026-08-03
+
+### Changed
+
+#### repo
+- `CLAUDE.md` declares the one place this repo departs from the `git-commit` skill it ships:
+  the 50-character subject cap, which that skill marks `NEVER`. Measured over the whole
+  history: **58 of 64** subjects exceed it, median 70, longest 99. The long form is
+  deliberate here — the subject states the defect rather than labelling the change, because
+  `git log --oneline` is the first place anyone looks for a *why* — but it had never been
+  written down, so `CLAUDE.md` pointed at a rule the repo disregards nine times out of ten.
+  A rule in that state is not a rule; it teaches the next reader to skim the file it lives
+  in. The skill is unchanged: 50 remains a sound default for the repos it ships to.
+
 ## [1.12.5] - 2026-08-03
 
 ### Fixed

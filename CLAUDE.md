@@ -48,7 +48,7 @@ Reference files in `references/` provide extended examples and documentation tha
 
 ## Conventions
 
-- **Commits**: Conventional Commits format - `type(scope): subject` (see `plugins/github-workflow/skills/git-commit/SKILL.md`)
+- **Commits**: Conventional Commits format - `type(scope): subject` (see `plugins/github-workflow/skills/git-commit/SKILL.md`), with **one declared exception**: the subject is not capped at 50 characters here. That skill marks the cap `NEVER` and it is a sound default for the repos it ships to; in this repo the subject states the defect ("il README descriveva una suite sola e un gate che grep-pava i file interi") rather than labelling the change, because `git log --oneline` is the first place anyone looks for a *why*. Measured 2026-08-03: 58 of 64 subjects exceed 50, median 70, longest 99. Keep them under ~100 and let the body carry the rest. The exception is written here because a rule disregarded 90% of the time is not a rule, it teaches the next reader to skim the file it lives in.
 - **Naming**: lowercase, hyphens between words, no spaces (e.g., `github-pr-review`)
 - **Merge strategy**: always merge commits (`--merge`), never squash/rebase
 - **Changelog**: follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format
