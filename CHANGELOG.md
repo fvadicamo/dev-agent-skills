@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-08-03
+
+### Added
+
+#### repo
+- `plugins/privacy-guard/tests/` — regression suite for `check_privacy.sh` and
+  `check-sync.sh`, in the shape the guardrails plugin already used in this repo. It was the
+  only plugin whose scripts had no tests, and it is the one that changed three times in a
+  day, each time on a defect that a case would have caught. Provable rather than
+  decorative: `PRIVACY_SCRIPT=` points it at a candidate, and against the pre-1.9.0 script
+  it reports four failures, one per defect fixed there.
+- One case is marked **XFAIL** and reports without failing the run: a malformed regex in the
+  denylist makes `grep` exit 2 and a real leak passes with exit 0 (the open defect). Deleting
+  it would lose the only executable record of that defect; letting it fail would leave a
+  permanently red suite, which is a suite people stop reading. When the defect is fixed the
+  runner prints `XPASS` and fails until the marker is dropped, so a fix cannot land while the
+  suite still calls it broken.
+
+### Changed
+
+#### repo
+- `.githooks/pre-commit` runs a suite **per plugin** instead of one inlined block. The old
+  shape ended in `exit 0` when guardrails files were not staged, so any suite added after it
+  would never have run: the next one would have been installed and silently dead. Adding a
+  plugin's suite is now one line.
+- Its header no longer claims the privacy check reads the working tree rather than the staged
+  blobs. True until 1.9.0, false since: the script reads `git diff --cached`, so the
+  framework's stash step changes nothing, and a token living only in an unstaged edit is no
+  longer reported.
+
 ## [1.10.0] - 2026-08-03
 
 ### Added

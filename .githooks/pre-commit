@@ -4,20 +4,24 @@
 #   1. privacy: blocks a commit that stages a token from the local denylist
 #      (.local/privacy-denylist.txt, gitignored). A no-op when that file is
 #      absent, which is the case for every external contributor.
-#   2. guardrails: runs the guard-destructive regression suite when the hook or
-#      its tests are staged. A guardrail must never ship a regression.
+#   2. regression suites: runs a plugin's suite when that plugin's shipped files
+#      or its tests are staged. A guard must never ship a regression, and the
+#      only moment anyone reliably runs a suite is the moment they touch it.
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 # Bypass once:             git commit --no-verify
 #
 # Because core.hooksPath is set, `pre-commit install` refuses to run here by
 # design, so the privacy script is invoked directly instead of through the
-# pre-commit framework. One consequence: without the framework's stash step the
-# check reads the working tree, not the staged blobs, so a token that exists
-# only in an unstaged edit is still reported. It errs toward noticing.
+# pre-commit framework. Since 1.9.0 the script reads `git diff --cached`, so the
+# framework's stash step no longer changes what it sees: staged blobs either way.
+# The flip side is stated in the skill: a token living only in an unstaged edit
+# is no longer reported.
 set -uo pipefail
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+staged="$(git diff --cached --name-only)"
+rc=0
 
 # --- 1. privacy denylist -----------------------------------------------------
 # The canonical script ships with the privacy-guard skill in this same repo, so
@@ -32,28 +36,29 @@ if [[ -f "$privacy" ]]; then
     fi
 fi
 
-# --- 2. guardrails regression suite ------------------------------------------
-staged="$(git diff --cached --name-only)"
-printf '%s\n' "$staged" | grep -qE '^plugins/guardrails/(hooks|tests)/' || exit 0
+# --- 2. regression suites ----------------------------------------------------
+# One function for every plugin that has a suite: adding the next one is a line,
+# and the previous shape (a single inlined block ending in `exit 0`) meant any
+# suite added after it would never have run.
+suite() {  # $1 plugin name, $2 regex of staged paths that should trigger it
+    printf '%s\n' "$staged" | grep -qE "$2" || return 0
+    local runner="$root/plugins/$1/tests/run.sh"
+    [[ -f "$runner" ]] || { echo "pre-commit: $runner missing, skipping" >&2; return 0; }
+    echo "pre-commit: $1 changed - running regression suite..."
+    local out status
+    out="$(cd "$root" && bash "$runner" 2>&1)"; status=$?
+    case $status in
+      0) printf '%s\n' "$out" | tail -1 ;;
+      2) printf '%s\n' "$out" >&2
+         echo "pre-commit: could not run the $1 suite (environment) - allowing commit; re-run it manually." >&2 ;;
+      *) printf '%s\n' "$out" >&2
+         echo "pre-commit: $1 tests FAILED - commit blocked. Override with 'git commit --no-verify'." >&2
+         return 1 ;;
+    esac
+    return 0
+}
 
-runner="$root/plugins/guardrails/tests/run.sh"
-[[ -f "$runner" ]] || { echo "pre-commit: $runner missing, skipping" >&2; exit 0; }
+suite guardrails    '^plugins/guardrails/(hooks|tests)/'    || rc=1
+suite privacy-guard '^plugins/privacy-guard/(skills|tests)/' || rc=1
 
-echo "pre-commit: guardrails hook/tests changed - running regression suite..."
-out="$(cd "$root" && bash "$runner" 2>&1)"; rc=$?
-
-case $rc in
-  0)
-    printf '%s\n' "$out" | tail -1
-    ;;
-  2)
-    printf '%s\n' "$out" >&2
-    echo "pre-commit: could not run the suite (environment) - allowing commit; re-run it manually." >&2
-    rc=0
-    ;;
-  *)
-    printf '%s\n' "$out" >&2
-    echo "pre-commit: guardrails tests FAILED - commit blocked. Override with 'git commit --no-verify'." >&2
-    ;;
-esac
 exit $rc
