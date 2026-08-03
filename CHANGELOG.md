@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-08-03
+
+### Security
+
+#### privacy-guard plugin
+- `check_privacy.sh` **never scanned a line beginning with `++`**, so a denylisted token on
+  such a line entered the repo with the guard reporting clean, exit 0. `added_lines()`
+  recognised the unified-diff header by shape (`/^\+\+\+/`), and once the diff prepends its
+  own `+`, a content line starting with `++` is byte-identical to that header: the rule
+  dropped both. The defect was in the canonical template, not in a copy, and every version
+  through 1.2.2 carried it.
+- **Second consequence, quieter and missed by the review that found the first**: the skipped
+  line did not advance the counter, so every later line in the same hunk was reported at the
+  wrong number. A guard that points at the wrong line sends whoever reads it to look in the
+  wrong place, which is the exact failure the line-number handling was added to prevent.
+  Measured on a five-line file: two lines vanished and the rest were numbered 2 and 3 instead
+  of 3 and 5.
+- The fix excludes the preamble by **position** instead of by shape: everything before the
+  first `@@` is header, and after it every `+` line is content, without exception. There is
+  no longer a content line that can be mistaken for a header.
+- Four regression cases, and the one that matters most is not the bypass: a commit that
+  **removes** a token from a `++` line must still pass, because the token is leaving the
+  repo. Without it, a fix that simply scanned everything would look correct and would wedge
+  the one commit the guard must never block. Against the pre-fix script the suite reports
+  three failures.
+- Reported from a review on a downstream repo that was syncing its copy to the template, and
+  reproduced independently before being fixed here.
+
+### Changed
+
+#### privacy-guard plugin
+- The script's own version line goes 1.1.1 -> **1.2.0**: that number is the only way a
+  materialized copy can know it is behind, and after this change every existing copy is.
+  Plugin version 1.2.2 -> 1.3.0.
+
+### Migration
+
+- **Recopy `scripts/check_privacy.sh` in every repo that ships one.** Until then those repos
+  run a guard with a known bypass. `references/check-sync.sh REPO...` names them: it now
+  reports the three known copies as `BEHIND`.
+- The guard now blocks commits it previously let through. That is the point, but a repo whose
+  documentation legitimately contains `++`-prefixed lines carrying its own denylist tokens
+  will notice on the next commit that adds one.
+
 ## [1.12.6] - 2026-08-03
 
 ### Changed

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Privacy guard: block commits containing tokens from a local denylist.
 #
-# check_privacy.sh 1.1.1 -- canonical copy: privacy-guard skill (dev-agent-skills),
+# check_privacy.sh 1.2.0 -- canonical copy: privacy-guard skill (dev-agent-skills),
 # references/check_privacy.sh. This file in a repo is a COPY: fix it upstream and recopy,
 # or the next sync silently reverts your change. The version line is what lets a copy know
 # it is behind; without it a divergence is invisible until it bites.
@@ -51,10 +51,19 @@ grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$DENYLIST" > "$patterns_file" |
 # lines of the diff, not of the file, and a guard whose output points at the wrong line
 # sends whoever reads it to look in the wrong place.
 added_lines() {
+    # Everything before the FIRST @@ is diff preamble (diff --git, index, ---, +++); after
+    # it, every line starting with '+' is content, no exceptions. Excluding the preamble by
+    # POSITION rather than by shape is the whole point: the '+++ b/file' header and a content
+    # line beginning with '++' are byte-identical once the diff prepends its own '+', so a
+    # rule matching /^\+\+\+/ dropped both. That cost two things, and the second was the
+    # quiet one: a token on such a line was never scanned (the guard reported clean), and the
+    # skipped line did not advance n, so every later line in the hunk was reported at the
+    # wrong number -- sending whoever read the output to look in the wrong place, which is
+    # the exact defect the line-number handling exists to prevent.
     git diff --cached -U0 -- "$1" | awk '
-        /^\+\+\+/ { next }
-        /^@@/     { split($3, h, ","); n = substr(h[1], 2) + 0; next }
-        /^\+/     { print n ":" substr($0, 2); n++ }
+        /^@@/    { in_hunk = 1; split($3, h, ","); n = substr(h[1], 2) + 0; next }
+        !in_hunk { next }
+        /^\+/    { print n ":" substr($0, 2); n++ }
     '
 }
 

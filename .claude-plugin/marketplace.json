@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills and hooks for development workflows - Git, GitHub, skill authoring, safety guardrails, and public-repo privacy",
-    "version": "1.12.6"
+    "version": "1.13.0"
   },
   "plugins": [
     {
@@ -34,7 +34,7 @@
       "name": "privacy-guard",
       "description": "Keeps private infrastructure details out of public repositories. Ships the privacy-guard skill: session rules for what must never cross the public boundary, plus a per-repo pre-commit gate built on a gitignored local denylist and gitleaks. The denylist is never committed, so the hook is a no-op for external contributors and in CI while gitleaks still covers generic secrets.",
       "source": "./plugins/privacy-guard",
-      "version": "1.2.2",
+      "version": "1.3.0",
       "strict": false
     }
   ]

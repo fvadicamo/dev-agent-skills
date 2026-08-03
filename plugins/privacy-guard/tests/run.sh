@@ -74,6 +74,30 @@ printf 'a\nb\nc\nd with %s\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
 got=$( (cd "$d" && bash "$CHECK" doc.md 2>&1) | sed -n 's/^doc\.md:\([0-9]*\):.*/\1/p' | head -1)
 ok 4 "${got:-none}" 'the match points at line 4, where the token really is'
 
+echo "== a line that looks like a diff header is content, and must be scanned =="
+# The '+++ b/file' header and a content line starting with '++' are indistinguishable once
+# the diff adds its own '+', so a rule that recognised the header by shape dropped both.
+# Two consequences, and the second is the quiet one: the skipped line did not advance the
+# counter, so every later line in the hunk was reported at the wrong number.
+d=$(repo plusplus "$TOKEN")
+printf 'first line\n++%s here\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+ok 1 "$(run "$d" doc.md)" 'a token on a line starting with ++ is blocked, not skipped'
+
+d=$(repo plusplusplus "$TOKEN")
+printf 'first line\n+++%s here\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+ok 1 "$(run "$d" doc.md)" 'a token on a line starting with +++ is blocked, not skipped'
+
+d=$(repo plusplus-lineno "$TOKEN")
+printf 'alpha\n++harmless\nbeta\nd with %s\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+got=$( (cd "$d" && bash "$CHECK" doc.md 2>&1) | sed -n 's/^doc\.md:\([0-9]*\):.*/\1/p' | head -1)
+ok 4 "${got:-none}" 'a ++ line earlier in the hunk does not shift the numbers after it'
+
+d=$(repo plusplus-removal "$TOKEN")
+printf 'first line\n++%s here\n' "$TOKEN" > "$d/doc.md"
+git -C "$d" add -A; git -C "$d" commit -qm "token committed on a ++ line"
+printf 'first line\n' > "$d/doc.md"; git -C "$d" add doc.md
+ok 0 "$(run "$d" doc.md)" 'removing a token from a ++ line still passes, it is leaving the repo'
+
 echo "== usage errors are not a clean verdict over zero files =="
 d=$(repo usage "$TOKEN")
 ok 2 "$(run "$d")" 'no arguments exits 2, not 0 in silence'
