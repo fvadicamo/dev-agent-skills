@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.2] - 2026-08-03
+
+### Fixed
+
+#### repo
+- `README.md` now states the version-bump rule. The check landed in 1.12.0 and the only
+  place explaining it was `CLAUDE.md`, which is contributor guidance for agents; a person
+  editing a plugin would have met a blocked commit citing a rule they had never read. A
+  guard whose reason is undocumented gets bypassed with `--no-verify`, which is how a guard
+  stops guarding while staying installed.
+
 ## [1.12.1] - 2026-08-03
 
 ### Fixed

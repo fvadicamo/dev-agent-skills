@@ -218,6 +218,14 @@ files or its tests are staged, and blocks the commit on a regression (bypass onc
 lines. There is no CI: that hook is the only gate, and it only fires for whoever set
 `core.hooksPath`.
 
+**If you change anything under `plugins/<name>/`, bump that plugin's version** in
+`plugins/<name>/.claude-plugin/plugin.json` and in its `marketplace.json` entry. The
+pre-commit hook blocks the commit otherwise, and the reason is not bookkeeping:
+`claude plugin update` compares the version number, so a change shipped under a frozen
+number never reaches an installed copy — the node keeps running the old files while the
+version claims they are current. Everything in the plugin directory is shipped, tests
+included. `.githooks/tests/run.sh` benches that check.
+
 See each suite's `tests/README.md` for the case format and `CLAUDE.md` for contributor
 guidance.
 
