@@ -61,8 +61,11 @@ suite() {  # $1 plugin name, $2 regex of staged paths that should trigger it
     return 0
 }
 
-suite guardrails    '^plugins/guardrails/(hooks|tests)/'    || rc=1
-suite privacy-guard '^plugins/privacy-guard/(skills|tests)/' || rc=1
+# The trigger is the whole plugin directory, not a list of the subdirectories that
+# were thought of on the day this was written. The version-bump check below states the
+# same rule for the same reason: an exclusion list covers the cases you remembered.
+suite guardrails    '^plugins/guardrails/'    || rc=1
+suite privacy-guard '^plugins/privacy-guard/' || rc=1
 
 # --- 3. version bump ---------------------------------------------------------
 # Its own bench lives in .githooks/tests/, run here when the check or the bench

@@ -59,11 +59,25 @@ check() {  # $1 expected exit, $2 label
     fi
 }
 
+# Four different reasons all exit 1, so an exit code alone cannot say a case blocked for
+# the reason it was written for. Use this where that ambiguity is real.
+check_because() {  # $1 expected exit, $2 substring the message must contain, $3 label
+    local got out
+    out="$(bash "$SCRIPT" 2>&1)"; got=$?
+    if [ "$got" = "$1" ] && printf '%s' "$out" | grep -qF "$2"; then
+        printf '  ok    %s      %s\n' "$1" "$3"; pass=$((pass + 1))
+    elif [ "$got" = "$1" ]; then
+        printf '  FAIL  right code, wrong reason (no "%s")  %s\n' "$2" "$3"; fail=$((fail + 1))
+    else
+        printf '  FAIL  exp=%s got=%s  %s\n' "$1" "$got" "$3"; fail=$((fail + 1))
+    fi
+}
+
 echo "== a shipped file that changes under a frozen version is blocked =="
 
 scaffold 1.2.0
 printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && git add -A
-check 1 "SKILL.md edited, version left at 1.2.0 (the privacy-guard case)"
+check_because 1 "ships changed files" "SKILL.md edited, version left at 1.2.0 (the privacy-guard case)"
 
 scaffold 1.2.0
 printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && set_version 1.2.1 && git add -A
@@ -101,11 +115,32 @@ check 0 "an entry carrying no version at all is legitimate, not a mismatch"
 
 scaffold 1.0.0 1.0.0
 set_entry 9.9.9 && git add -A
-check 1 "ONLY the marketplace entry edited, and made to disagree"
+check_because 1 "entry says 9.9.9" "ONLY the marketplace entry edited, and made to disagree"
 
 scaffold 1.0.0 1.0.0
 printf '# repo\n\nmore\n' > README.md && git add -A
 check 0 "a repo-level commit is not punished for a marketplace it did not touch"
+
+scaffold 1.0.0 1.0.0
+mkdir -p plugins/other/.claude-plugin
+printf '{ "name": "other", "version": "2.0.0" }\n' > plugins/other/.claude-plugin/plugin.json
+printf '{ "name": "m", "plugins": [ { "name": "foo", "version": "1.0.0" }, { "name": "other", "version": "2.0.0" } ] }\n' > .claude-plugin/marketplace.json
+git add -A && git -c commit.gpgsign=false commit -qm two
+printf '{ "name": "m", "plugins": [ { "name": "foo", "version": "1.0.0" }, { "name": "other", "version": "7.7.7" } ] }\n' > .claude-plugin/marketplace.json
+git add -A
+check 1 "a wrong entry for a plugin this commit does not touch is still caught"
+
+echo "== a manifest the check cannot read is not a clean run over zero entries =="
+
+scaffold 1.0.0 1.0.0
+printf '{ "name": "m", "plugins": [ { "name": "foo", "version": "9.9.9" },\n' > .claude-plugin/marketplace.json
+git add -A
+check_because 1 "does not parse as JSON" "staged marketplace.json that does not parse blocks instead of exiting 0"
+
+scaffold 1.0.0
+rm -f .claude-plugin/marketplace.json && git add -A
+printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && set_version 1.0.1 && git add -A
+check 0 "no marketplace at all is legitimate and stays silent"
 
 echo "== and when the lookup cannot run, it says so instead of passing =="
 

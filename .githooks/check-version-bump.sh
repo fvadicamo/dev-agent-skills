@@ -34,20 +34,31 @@ version_at() {  # $1 = HEAD | index, $2 = plugin name
 }
 
 # "name<TAB>version" for every marketplace entry that carries a version, read from the
-# INDEX. One call, not one per plugin. Needs python3; when it is missing the caller says so
-# rather than passing in silence, because a check that evaporates quietly reads as a pass.
+# INDEX. One call, not one per plugin. Three answers that are NOT the same thing, and
+# collapsing them is how this check first shipped a silent pass:
+#   __nomarketplace__  no manifest in the index -- legitimate, nothing to verify
+#   __malformed__      a manifest that does not parse -- the guard cannot read its own
+#                      input, so it must stop rather than report a clean run over zero
+#                      entries. Same rule as the malformed-denylist defect (#10): a check
+#                      that cannot read its list has not checked anything.
+#   __nopython__       no interpreter for the lookup -- half the check did not run, said
+#                      out loud rather than passed over.
 entry_map() {
     command -v python3 >/dev/null 2>&1 || { echo "__nopython__"; return; }
-    git show ":.claude-plugin/marketplace.json" 2>/dev/null | python3 -c '
+    local raw
+    raw="$(git show ":.claude-plugin/marketplace.json" 2>/dev/null)" || { echo "__nomarketplace__"; return; }
+    [ -n "$raw" ] || { echo "__nomarketplace__"; return; }
+    printf '%s' "$raw" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
 except Exception:
+    print("__malformed__")
     sys.exit(0)
 for e in d.get("plugins", []):
     if e.get("name") and e.get("version"):
         print("%s\t%s" % (e["name"], e["version"]))
-' 2>/dev/null
+'
 }
 
 rc=0
@@ -61,6 +72,15 @@ entries="$(entry_map)"
 if [ "$entries" = "__nopython__" ]; then
     echo "pre-commit: python3 not found - the marketplace-entry check did NOT run." >&2
     entries=""
+elif [ "$entries" = "__nomarketplace__" ]; then
+    entries=""
+elif [ "$entries" = "__malformed__" ]; then
+    echo "pre-commit: .claude-plugin/marketplace.json (staged) does not parse as JSON." >&2
+    echo "  The version check cannot read it, so it has verified nothing. Left as is, a" >&2
+    echo "  wrong entry would pass with exit 0 and only this line above a successful" >&2
+    echo "  commit. Fix the manifest ('claude plugin validate .' says where)." >&2
+    entries=""
+    rc=1
 elif git diff --cached --name-only -- .claude-plugin/marketplace.json | grep -q .; then
     to_verify="$(printf '%s\n' "$entries" | cut -f1)"     # marketplace touched: verify all
 else

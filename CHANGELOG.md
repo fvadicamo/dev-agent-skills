@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.4] - 2026-08-03
+
+### Fixed
+
+#### repo
+- A `marketplace.json` that does not parse made the entry check a **silent no-op**: the JSON
+  error was swallowed, the entry map came back empty, and the run reported clean over zero
+  entries. Measured: manifest truncated mid-array, entry at 9.9.9 against a `plugin.json` at
+  1.0.0, exit 0. It is the same shape as the open malformed-denylist defect (#10) — a guard
+  that cannot read its own input must stop, not guess — written into new code by someone who
+  knew about that issue. It now blocks and names the manifest.
+- The three answers that were collapsed into "empty" are now distinct: no manifest in the
+  index (legitimate, silent), a manifest that does not parse (blocks), no `python3` (warns
+  that half the check did not run). Two bench cases pin the first two.
+- The bench asserted only exit codes, so a case could pass by blocking for the wrong reason —
+  four different failures all exit 1. `check_because` now asserts the message too, on the
+  three cases where the ambiguity is real.
+- `.githooks/pre-commit` triggered a plugin's suite from a hand-written list of its
+  subdirectories (`(hooks|tests)`, `(skills|tests)`). That is the exclusion-list trap the
+  version-bump check's own comment warns about, sitting ten lines above it: the list covers
+  what was thought of the day it was written, and a plugin that grows a directory silently
+  stops running its suite. The trigger is now the whole plugin directory.
+
 ## [1.12.3] - 2026-08-03
 
 ### Fixed
