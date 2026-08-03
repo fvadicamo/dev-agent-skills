@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.5] - 2026-08-03
+
+### Fixed
+
+#### privacy-guard plugin
+- `tests/README.md` still described the pre-commit trigger as the two subdirectories named
+  in it before 1.12.4 widened it to the whole plugin directory. Found by the sweep over
+  1.12.4, one file outside the perimeter that release touched — which is where doc drift
+  lives, by definition.
+
 ## [1.12.4] - 2026-08-03
 
 ### Fixed

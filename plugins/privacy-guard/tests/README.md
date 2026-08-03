@@ -5,8 +5,10 @@ bash plugins/privacy-guard/tests/run.sh
 ```
 
 Runs automatically from `.githooks/pre-commit` when anything under
-`plugins/privacy-guard/skills/` or `plugins/privacy-guard/tests/` is staged, which is the
-only moment anyone reliably runs a suite.
+`plugins/privacy-guard/` is staged, which is the only moment anyone reliably runs a suite.
+The trigger is the whole plugin directory on purpose: it used to name the two
+subdirectories that existed when it was written, and a plugin that grows a third would
+have stopped running its suite without saying so.
 
 ## What it covers
 
