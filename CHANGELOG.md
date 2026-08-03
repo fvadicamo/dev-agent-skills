@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.3] - 2026-08-03
+
+### Fixed
+
+#### repo
+- `check-version-bump.sh` missed the marketplace-entry mismatch in the one case where it is
+  most likely: a commit that edits **only** `.claude-plugin/marketplace.json`. The check
+  looped over plugins with staged changes under `plugins/`, and that edit touches no plugin
+  directory, so the loop body never ran. Measured on a throwaway repo: entry at 9.9.9,
+  `plugin.json` at 1.0.0, exit 0. Editing the entry by hand is exactly how someone "fixes" a
+  version, so the guard was blind to its own most probable input.
+- The set of entries verified is now: the plugins with staged changes, or **all** of them
+  when `marketplace.json` itself is staged. A repo-level commit that touches neither is
+  still not punished for drift it did not cause.
+- The `python3`-absent branch had no case, so nothing proved it warns instead of passing.
+  It has one now, run with a `PATH` that deliberately excludes `python3`. An untested
+  fallback is indistinguishable from a fallback that silently returns "clean".
+- `.githooks/pre-commit` no longer invokes the check unguarded: a missing script produced a
+  `No such file` and a blocked commit rather than a stated reason. It now says the check did
+  not run, the same shape the suite runner already used.
+- `CLAUDE.md` described the bench as it stood before 1.12.1, listing neither the
+  marketplace-entry cases nor the `python3` one — the same doc drift this session opened by
+  fixing, reintroduced two releases later.
+
 ## [1.12.2] - 2026-08-03
 
 ### Fixed

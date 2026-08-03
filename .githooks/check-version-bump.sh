@@ -33,11 +33,10 @@ version_at() {  # $1 = HEAD | index, $2 = plugin name
     esac | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
 }
 
-# The version a plugin's marketplace entry advertises, or empty if there is no marketplace,
-# no entry, or no version on it (all legitimate). Needs python3 for the lookup by name;
-# when it is missing the check says so rather than passing in silence, because a check that
-# evaporates quietly reads as a pass.
-entry_version() {  # $1 = plugin name
+# "name<TAB>version" for every marketplace entry that carries a version, read from the
+# INDEX. One call, not one per plugin. Needs python3; when it is missing the caller says so
+# rather than passing in silence, because a check that evaporates quietly reads as a pass.
+entry_map() {
     command -v python3 >/dev/null 2>&1 || { echo "__nopython__"; return; }
     git show ":.claude-plugin/marketplace.json" 2>/dev/null | python3 -c '
 import json, sys
@@ -46,38 +45,50 @@ try:
 except Exception:
     sys.exit(0)
 for e in d.get("plugins", []):
-    if e.get("name") == sys.argv[1] and "version" in e:
-        print(e["version"])
-        break
-' "$1" 2>/dev/null
+    if e.get("name") and e.get("version"):
+        print("%s\t%s" % (e["name"], e["version"]))
+' 2>/dev/null
 }
 
 rc=0
-warned_nopython=0
-for p in $(git diff --cached --name-only -- plugins/ | cut -d/ -f2 | sort -u); do
+changed="$(git diff --cached --name-only -- plugins/ | cut -d/ -f2 | sort -u)"
+
+# Which plugins get their entry verified. The set is NOT just the plugins with staged
+# changes: editing only .claude-plugin/marketplace.json is exactly how a version gets
+# "fixed" by hand, and that edit touches no plugin directory at all. Checking only the
+# changed plugins let it through -- measured, this is the hole the first version shipped.
+entries="$(entry_map)"
+if [ "$entries" = "__nopython__" ]; then
+    echo "pre-commit: python3 not found - the marketplace-entry check did NOT run." >&2
+    entries=""
+elif git diff --cached --name-only -- .claude-plugin/marketplace.json | grep -q .; then
+    to_verify="$(printf '%s\n' "$entries" | cut -f1)"     # marketplace touched: verify all
+else
+    to_verify="$changed"
+fi
+
+# The marketplace entry advertises a version to the browser UI before anything is fetched,
+# so a stale one misinforms exactly the reader who has no way to check. `claude plugin tag`
+# refuses on a mismatch, but only at tag time: without this the pair drifts until someone
+# tags.
+for p in ${to_verify:-}; do
+    [ -n "$p" ] || continue
+    ev="$(printf '%s\n' "$entries" | awk -F'\t' -v n="$p" '$1==n {print $2; exit}')"
+    [ -n "$ev" ] || continue                     # no entry, or an entry with no version
+    pv="$(version_at index "$p")"
+    [ -n "$pv" ] || continue                     # entry for a plugin not in this tree
+    [ "$ev" = "$pv" ] && continue
+    echo "pre-commit: plugins/$p is $pv but its marketplace.json entry says $ev." >&2
+    echo "  plugin.json wins at install time, so the entry misinforms the plugin" >&2
+    echo "  browser, which is the only place that version is read before a fetch." >&2
+    echo "  Set the entry to $pv." >&2
+    rc=1
+done
+
+for p in $changed; do
     [ -n "$p" ] || continue
     old="$(version_at HEAD "$p")"
     new="$(version_at index "$p")"
-
-    # The marketplace entry advertises a version to the browser UI before anything is
-    # fetched, so a stale entry misinforms exactly the reader who cannot check. `claude
-    # plugin tag` refuses on a mismatch, but only at tag time: without this, the pair can
-    # drift for as long as nobody tags.
-    if [ -n "$new" ]; then
-        ev="$(entry_version "$p")"
-        if [ "$ev" = "__nopython__" ]; then
-            [ "$warned_nopython" -eq 0 ] && {
-                echo "pre-commit: python3 not found - the marketplace-entry check did NOT run." >&2
-                warned_nopython=1
-            }
-        elif [ -n "$ev" ] && [ "$ev" != "$new" ]; then
-            echo "pre-commit: plugins/$p is $new but its marketplace.json entry says $ev." >&2
-            echo "  plugin.json wins at install time, so the entry misinforms the plugin" >&2
-            echo "  browser, which is the only place that version is read before a fetch." >&2
-            echo "  Set the entry to $new." >&2
-            rc=1
-        fi
-    fi
 
     # No version in HEAD: the plugin is being added, there is nothing to bump from.
     # No version in the index: the plugin is being removed.

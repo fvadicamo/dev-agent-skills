@@ -128,9 +128,11 @@ runner reports `XPASS` and fails until the marker is removed. See that suite's
 README.
 
 The repo's own hooks have a bench too, `.githooks/tests/run.sh`, covering
-`check-version-bump.sh`. Its cases are the two real misses (a skill file and a
-test file changed under a frozen version) plus the edges that must **not** block:
-a repo-level file, a plugin being added, a plugin being removed.
+`check-version-bump.sh`. Its cases are the real misses (a skill file and a test
+file changed under a frozen version; a marketplace entry edited on its own into
+disagreement), the edges that must **not** block (a repo-level file, an entry
+carrying no version, a plugin being added, a plugin being removed), and one that
+asserts the check *complains* rather than passing when `python3` is absent.
 
 A pre-commit hook (`.githooks/pre-commit`) runs a plugin's suite when that
 plugin's shipped files or its tests are staged, runs the version-bump check on

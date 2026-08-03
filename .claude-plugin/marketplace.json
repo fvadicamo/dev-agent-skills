@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills and hooks for development workflows - Git, GitHub, skill authoring, safety guardrails, and public-repo privacy",
-    "version": "1.12.2"
+    "version": "1.12.3"
   },
   "plugins": [
     {

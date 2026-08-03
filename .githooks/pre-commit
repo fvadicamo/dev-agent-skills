@@ -77,6 +77,11 @@ if printf '%s\n' "$staged" | grep -qE '^\.githooks/(check-version-bump\.sh|tests
         rc=1
     fi
 fi
-bash "$root/.githooks/check-version-bump.sh" || rc=1
+bump="$root/.githooks/check-version-bump.sh"
+if [[ -f "$bump" ]]; then
+    bash "$bump" || rc=1
+else
+    echo "pre-commit: $bump missing - the version-bump check did NOT run." >&2
+fi
 
 exit $rc

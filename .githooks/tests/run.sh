@@ -99,6 +99,31 @@ scaffold 1.2.0
 printf 'changed\n' >> plugins/foo/skills/bar/SKILL.md && set_version 1.2.1 && git add -A
 check 0 "an entry carrying no version at all is legitimate, not a mismatch"
 
+scaffold 1.0.0 1.0.0
+set_entry 9.9.9 && git add -A
+check 1 "ONLY the marketplace entry edited, and made to disagree"
+
+scaffold 1.0.0 1.0.0
+printf '# repo\n\nmore\n' > README.md && git add -A
+check 0 "a repo-level commit is not punished for a marketplace it did not touch"
+
+echo "== and when the lookup cannot run, it says so instead of passing =="
+
+scaffold 1.0.0 1.0.0
+set_entry 9.9.9 && git add -A
+nopy="$PWD/.nopy-bin"; mkdir -p "$nopy"
+for t in git sed head cut sort awk grep printf env bash; do
+    p="$(command -v "$t" 2>/dev/null)" && ln -sf "$p" "$nopy/$t"
+done
+out="$(PATH="$nopy" bash "$SCRIPT" 2>&1)"; got=$?
+if [ "$got" = 1 ] && printf '%s' "$out" | grep -q "did NOT run"; then
+    printf '  FAIL  exp=silent-but-loud got=blocked  no python3: must warn, not block\n'; fail=$((fail + 1))
+elif printf '%s' "$out" | grep -q "python3 not found"; then
+    printf '  ok    warn   without python3 it names the half that did not run\n'; pass=$((pass + 1))
+else
+    printf '  FAIL  no warning printed  without python3 the entry check passes in silence\n'; fail=$((fail + 1))
+fi
+
 echo "== the lifecycle edges must not block =="
 
 scaffold 1.0.0
