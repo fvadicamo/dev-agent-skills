@@ -6,31 +6,35 @@
   },
   "metadata": {
     "description": "Agent skills and hooks for development workflows - Git, GitHub, skill authoring, safety guardrails, and public-repo privacy",
-    "version": "1.8.0"
+    "version": "1.12.0"
   },
   "plugins": [
     {
       "name": "github-workflow",
       "description": "Git commit, PR creation, review, and merge skills following Conventional Commits",
       "source": "./plugins/github-workflow",
+      "version": "1.4.2",
       "strict": false
     },
     {
       "name": "skill-authoring",
       "description": "Guide for creating Claude Code skills following Anthropic's best practices",
       "source": "./plugins/skill-authoring",
+      "version": "1.4.0",
       "strict": false
     },
     {
       "name": "guardrails",
       "description": "Safety guardrails for running Claude Code with reduced supervision. The guard-destructive PreToolUse hook matches against a normalized view of each command (heredoc bodies and comments stripped, quoted strings neutralized except interpreter arguments like ssh / sh -c / eval / su / doas), so a command that merely mentions a destructive pattern is not flagged. It hard-blocks catastrophic Bash commands (rm -rf /, rsync --delete, docker volume rm) and makes rm/rmdir scope-aware: operations whose operands all resolve inside the allowed workspace (the session project root, temp dirs, any $GUARD_ALLOWED_EXTRA root, or a variable assigned from a bare mktemp earlier in the same command) run silently, while anything outside it (or any glob/variable/escape it cannot resolve) raises a single reflective confirmation. git reset --hard / clean / restore, shred, dd, mkfs still always prompt.",
       "source": "./plugins/guardrails",
+      "version": "1.7.5",
       "strict": false
     },
     {
       "name": "privacy-guard",
       "description": "Keeps private infrastructure details out of public repositories. Ships the privacy-guard skill: session rules for what must never cross the public boundary, plus a per-repo pre-commit gate built on a gitignored local denylist and gitleaks. The denylist is never committed, so the hook is a no-op for external contributors and in CI while gitleaks still covers generic secrets.",
       "source": "./plugins/privacy-guard",
+      "version": "1.2.1",
       "strict": false
     }
   ]

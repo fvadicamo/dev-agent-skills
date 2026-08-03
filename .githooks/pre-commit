@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit, two checks.
+# Pre-commit, three checks.
 #
 #   1. privacy: blocks a commit that stages a token from the local denylist
 #      (.local/privacy-denylist.txt, gitignored). A no-op when that file is
@@ -7,6 +7,9 @@
 #   2. regression suites: runs a plugin's suite when that plugin's shipped files
 #      or its tests are staged. A guard must never ship a regression, and the
 #      only moment anyone reliably runs a suite is the moment they touch it.
+#   3. version bump: blocks a commit that changes what a plugin ships without
+#      moving that plugin's version. Without the bump the change never reaches
+#      an installed copy, because `claude plugin update` compares the number.
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 # Bypass once:             git commit --no-verify
@@ -60,5 +63,20 @@ suite() {  # $1 plugin name, $2 regex of staged paths that should trigger it
 
 suite guardrails    '^plugins/guardrails/(hooks|tests)/'    || rc=1
 suite privacy-guard '^plugins/privacy-guard/(skills|tests)/' || rc=1
+
+# --- 3. version bump ---------------------------------------------------------
+# Its own bench lives in .githooks/tests/, run here when the check or the bench
+# is staged, for the same reason the plugin suites are.
+if printf '%s\n' "$staged" | grep -qE '^\.githooks/(check-version-bump\.sh|tests/)'; then
+    echo "pre-commit: version-bump check changed - running its bench..."
+    if out="$(bash "$root/.githooks/tests/run.sh" 2>&1)"; then
+        printf '%s\n' "$out" | tail -1
+    else
+        printf '%s\n' "$out" >&2
+        echo "pre-commit: version-bump bench FAILED - commit blocked." >&2
+        rc=1
+    fi
+fi
+bash "$root/.githooks/check-version-bump.sh" || rc=1
 
 exit $rc

@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-08-03
+
+### Added
+
+#### repo
+- `.githooks/check-version-bump.sh` blocks a commit that changes what a plugin ships
+  without moving that plugin's version. Without the bump the change never reaches an
+  installed copy: `claude plugin update` compares the number, sees none, and does not
+  fetch — so the node keeps running the old files while the version claims otherwise. It
+  is the `DIVERGED` case `check-sync.sh` was written to catch for the materialized copies
+  of `check_privacy.sh`, one level up, where nothing was watching.
+- It happened **twice** and neither time did anyone notice. `guardrails`: four commits to
+  `guard-destructive.sh` after the bump to 1.7.4. `privacy-guard`: `SKILL.md` rewritten
+  after the bump to 1.2.0, leaving two different contents both called 1.2.0 — measured 12
+  lines apart between this repo and the installed cache on a node.
+- The rule is "any staged change under `plugins/<name>/` bumps that plugin", not a list of
+  which subdirectories count. Everything in that directory is shipped, tests included
+  (verified against a real plugin cache), and a hand-kept list of exceptions is wrong the
+  day someone adds a directory nobody thought of.
+- `.githooks/tests/run.sh` benches it, with a `BUMP_SCRIPT=` override. Seven cases: the two
+  real misses, and the edges that must not block (a repo-level file, a plugin being added,
+  a plugin being removed). Against a candidate that always exits 0 it reports two failures.
+
+### Changed
+
+#### repo
+- Every `marketplace.json` plugin entry now carries its `version`, matching its
+  `plugin.json`. This is what makes `claude plugin tag` a real gate: it refuses to tag when
+  the two disagree, and until now there was nothing for it to compare. The entry is not a
+  redundant copy — the plugin browser renders a version **only** when the entry carries
+  one, and at that point no `plugin.json` has been fetched.
+- `metadata.version` 1.8.0 -> 1.12.0, following the changelog heading. It had drifted three
+  minor versions behind while nothing broke, which is exactly why it drifted.
+- `CLAUDE.md` gains a *Versioning and release* section: which of the three numbers answers
+  which question, who reads each, and the release commands. The two points that were only
+  ever implicit are now written down, which is the point — what is not written there is
+  what stops being done.
+
+#### guardrails plugin
+- Version 1.7.4 -> 1.7.5. No behaviour change: the bump the four post-1.7.4 fixes to
+  `guard-destructive.sh` and today's tests README never got.
+
+#### privacy-guard plugin
+- Version 1.2.0 -> 1.2.1. No behaviour change: the bump the `SKILL.md` rewrite of `b9bff66`
+  never got. Nodes on 1.2.0 could not receive it, since the number had not moved.
+
 ## [1.11.1] - 2026-08-03
 
 ### Fixed

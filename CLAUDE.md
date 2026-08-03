@@ -54,6 +54,47 @@ Reference files in `references/` provide extended examples and documentation tha
 - **Changelog**: follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format
 - **Versioning**: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
+## Versioning and release
+
+Three numbers, and they answer different questions. Keeping that straight is what
+went wrong twice: a shipped file changed under a frozen number, and nobody saw it.
+
+| Number | Question it answers | Who reads it |
+|---|---|---|
+| `plugins/<name>/.claude-plugin/plugin.json` `version` | which build of this plugin is installed | `claude plugin update`, the cache dir `<plugin>/<version>/` |
+| the same number in that plugin's `marketplace.json` entry | which version this marketplace advertises | the plugin browser UI, before anything is fetched |
+| `marketplace.json` `metadata.version` | which release of **this repo** you are on | `CHANGELOG.md`, the `v*` tag, the GitHub release |
+
+**The rule that got missed**: any change to a file under `plugins/<name>/` bumps
+that plugin's version. *Everything* in that directory is shipped, tests included:
+the installed copy is the whole directory. Without a bump, `claude plugin update`
+compares the number, sees no change, and never fetches the new content — the node
+runs the old files under the new name and nothing says so.
+
+`.githooks/check-version-bump.sh` enforces it at commit time, because the rule
+existed in spirit and was disregarded twice anyway. Its bench is
+`.githooks/tests/run.sh`, with a `BUMP_SCRIPT=` override.
+
+The plugin entry's `version` must match its `plugin.json`; `claude plugin tag`
+refuses to tag when they disagree, and says `plugin.json wins at install time`.
+The entry is not redundant: the browser UI renders a version only when the entry
+carries one, and at that point no `plugin.json` has been fetched.
+
+`metadata.version` follows the `CHANGELOG.md` heading, always.
+
+**At every change**: bump what moved, add the changelog entry, then tag. Per-plugin
+tags come from the tool, the repo tag is created by hand and carries the release:
+
+```sh
+claude plugin tag ./plugins/<name> --push     # <name>--v<version>, validates the pair
+git tag -a v<X.Y.Z> -m "v<X.Y.Z>" && git push origin v<X.Y.Z>
+gh release create v<X.Y.Z> --notes-from-tag
+```
+
+Releases are not how code reaches a node — see *Distribution is not automatic* —
+but they are the only moment anyone decides a version is distributable. Skipping
+them is how the numbers drifted five months without anything breaking.
+
 ## Testing
 
 Two plugins ship executable logic, and each has a regression suite. **Run the
@@ -83,10 +124,16 @@ an executable record. It does not fail the run; when the defect is fixed the
 runner reports `XPASS` and fails until the marker is removed. See that suite's
 README.
 
+The repo's own hooks have a bench too, `.githooks/tests/run.sh`, covering
+`check-version-bump.sh`. Its cases are the two real misses (a skill file and a
+test file changed under a frozen version) plus the edges that must **not** block:
+a repo-level file, a plugin being added, a plugin being removed.
+
 A pre-commit hook (`.githooks/pre-commit`) runs a plugin's suite when that
-plugin's shipped files or its tests are staged, and blocks the commit on failure.
-Adding the next plugin's suite is one `suite ...` line. Enable the hook once per
-clone (it lives in a versioned, shared dir, not `.git/hooks/`):
+plugin's shipped files or its tests are staged, runs the version-bump check on
+every commit, and blocks on failure. Adding the next plugin's suite is one
+`suite ...` line. Enable the hook once per clone (it lives in a versioned, shared
+dir, not `.git/hooks/`):
 
 ```sh
 git config core.hooksPath .githooks
