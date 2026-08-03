@@ -56,29 +56,70 @@ Reference files in `references/` provide extended examples and documentation tha
 
 ## Testing
 
-The `guardrails` hook is the only executable logic in this repo and ships with a
-regression suite at `plugins/guardrails/tests/`. **Run it after any change to
-`guard-destructive.sh`:**
+Two plugins ship executable logic, and each has a regression suite. **Run the
+suite of whatever you touched, before committing:**
 
 ```sh
-bash plugins/guardrails/tests/run.sh
+bash plugins/guardrails/tests/run.sh        # guard-destructive.sh
+bash plugins/privacy-guard/tests/run.sh     # check_privacy.sh, check-sync.sh
 ```
 
-It exits non-zero if any case fails (usable in pre-commit / CI) and runs on both
-macOS and Linux. When you change the hook's behavior, add cases that pin both the
-new behavior and its failure modes: for a guardrail the dangerous direction is a
-false negative (something destructive running silently), so favour adversarial
-cases asserted as `ASK`/`BLOCK`. See `plugins/guardrails/tests/README.md`.
+Both exit non-zero on failure (usable in pre-commit / CI) and run on macOS and
+Linux. When you change behaviour, add cases that pin the new behaviour **and its
+failure modes**. For a guard the dangerous direction is the false negative, the
+one where nothing is printed and the commit goes through, so favour adversarial
+cases: `ASK`/`BLOCK` for guardrails, and for privacy-guard at least one case
+whose only job is to say whether the guard was neutralised rather than fixed. A
+suite made only of cases that must pass goes green on a guard that guards
+nothing.
 
-A pre-commit hook (`.githooks/pre-commit`) runs the suite automatically when the
-guardrails hook or its tests are staged, and blocks the commit on failure. Enable
-it once per clone (it lives in a versioned, shared dir, not `.git/hooks/`):
+Both suites accept an override that points them at a **candidate** version
+(`GUARD_HOOK=`, `PRIVACY_SCRIPT=`, `SYNC_SCRIPT=`). Use it to prove the suite can
+fail: point it at the version from before a fix, and it must go red. A bench
+nobody has seen fail says nothing.
+
+`plugins/privacy-guard/tests/` carries one **XFAIL** case, an open defect kept as
+an executable record. It does not fail the run; when the defect is fixed the
+runner reports `XPASS` and fails until the marker is removed. See that suite's
+README.
+
+A pre-commit hook (`.githooks/pre-commit`) runs a plugin's suite when that
+plugin's shipped files or its tests are staged, and blocks the commit on failure.
+Adding the next plugin's suite is one `suite ...` line. Enable the hook once per
+clone (it lives in a versioned, shared dir, not `.git/hooks/`):
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
-Bypass a single commit with `git commit --no-verify`.
+Bypass a single commit with `git commit --no-verify`. There is **no CI**: the
+pre-commit is the only gate, and it only fires for whoever set `core.hooksPath`.
+
+## Backlog
+
+This repo has no `BACKLOG.md`: the backlog **is** the issue tracker. Start a
+session with `gh issue list`. Issues here are written to be self-contained, with
+the mechanics, what was measured, and a recommended answer, because the person
+who reads one is rarely the person who wrote it.
+
+## Distribution is not automatic
+
+Pushing to the default branch is **not** enough to reach a node. Three copies are
+in play and none of them aligns on its own: this repo, the marketplace clone under
+`~/.claude/plugins/marketplaces/`, and the installed plugin under
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`. Measured on two nodes
+on 2026-08-03: the marketplace clone was five days and 28 commits behind while the
+installed plugin was two minor versions back, so a session invoking a skill was
+running code fixed hours earlier.
+
+```sh
+claude plugin marketplace update <marketplace>
+claude plugin update <plugin>@<marketplace>    # restart to apply
+```
+
+`claude plugin tag` creates a release tag and validates that `plugin.json` and the
+marketplace entry agree, which is the check the version drift here has been
+missing.
 
 ## Writing skills
 
