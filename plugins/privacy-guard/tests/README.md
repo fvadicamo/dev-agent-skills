@@ -32,13 +32,21 @@ The overrides are what makes the suite provable rather than decorative: point it
 version from before a fix and it must go red. Against the pre-1.9.0 `check_privacy.sh` it
 reports four failures, one per defect fixed there.
 
-## The XFAIL case
+## The XFAIL cases
 
-One case asserts behaviour the script does **not** have yet: a malformed regex in the
-denylist makes `grep` exit 2, the condition is false, and a real leak passes with exit 0.
-It is reported as `xfail` and does not fail the run.
+Two cases assert behaviour the script does **not** have yet, and are reported as `xfail`
+without failing the run:
 
-Deleting it would lose the only executable record of an open defect. Letting it fail would
-leave a permanently red suite, which is a suite people stop reading. When the defect is
+- a malformed regex in the denylist makes `grep` exit 2, the condition is false, and a real
+  leak passes with exit 0;
+- `PRIVACY_DENYLIST` pointing at a file that is not there exits 0, exactly like the
+  legitimate no-op of a repo that has no denylist. Setting the variable **declares** that a
+  denylist exists, so the two cases are opposite and the script cannot tell them apart. It
+  matters because `.local/` is gitignored: a task worktree never carries the denylist, and
+  the remedy adopted downstream is to export an absolute path, which puts every worker in
+  this case.
+
+Deleting them would lose the only executable record of an open defect. Letting them fail
+would leave a permanently red suite, which is a suite people stop reading. When the defect is
 fixed the runner prints `XPASS`, says the marker must go, and fails the run until it does,
 so a fix cannot land while the suite still calls it broken.

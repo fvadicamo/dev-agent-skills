@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   credential. Evidence for #12, which is about the `gh` channel having no technical guard.
 - Plugin 1.7.5 -> **1.7.6**. No behaviour change: the hook is untouched.
 
+### Added
+
+#### privacy-guard plugin
+- A second XFAIL case, holding down the open defect of #18: `PRIVACY_DENYLIST` pointing at a
+  file that is not there exits 0, exactly like the legitimate no-op of a repo that has no
+  denylist. Setting the variable **declares** that a denylist exists, so the two are opposite
+  statements and the script cannot tell them apart.
+- It is not a hypothetical shape. `.local/` is gitignored, so a task worktree never carries
+  the denylist, and the remedy adopted downstream is to export an absolute `PRIVACY_DENYLIST`
+  so workers can reach it. That puts every worker in precisely this case, where a stale path
+  buys a guard reporting clean over zero bytes read.
+- Verified against a candidate carrying the fix (`PRIVACY_SCRIPT=`): the case flips to XPASS
+  and the runner fails the run until the marker goes, and the other 22 cases stay green, so
+  the fix direction does not disturb the two no-ops that are legitimate.
+- Plugin 1.3.1 -> **1.3.2**. `check_privacy.sh` itself is unchanged and stays **1.2.1**: the
+  bump is the tests, which ship in the plugin directory like everything else.
+
 ### Migration
 
 - **No recopy needed.** No shipped script changed in this release.

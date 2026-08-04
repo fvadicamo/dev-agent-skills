@@ -11,9 +11,9 @@
 # Every case is named after the defect it holds down, so a regression is recognised by name
 # rather than by line number. All of them were met in the field, not imagined.
 #
-# One case is marked XFAIL: it asserts behaviour the script does NOT have yet, and it is
-# reported without failing the run. That is deliberate. Deleting it would lose the only
-# executable record of an open defect; letting it fail would leave a permanently red suite,
+# Two cases are marked XFAIL: they assert behaviour the script does NOT have yet, and are
+# reported without failing the run. That is deliberate. Deleting them would lose the only
+# executable record of an open defect; letting them fail would leave a permanently red suite,
 # which is a suite people stop reading. When the defect is fixed the runner says so and
 # tells you to drop the marker.
 set -uo pipefail
@@ -143,6 +143,22 @@ d=$(repo malformed "$TOKEN
 (unclosed parenthesis")
 printf 'first line\nline with %s inside\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
 xok 1 "$(run "$d" doc.md)" 'grep exits 2 on a bad regex and the leak passes with exit 0'
+
+echo "== XFAIL: a denylist DECLARED and not found reads as no denylist at all (open defect) =="
+# The no-op above is right for a repo that has no denylist and must not have one (external
+# contributors, CI). Setting PRIVACY_DENYLIST is the opposite statement: it declares that a
+# denylist exists at that path. Today both exit 0, so a provisioning error is indistinguishable
+# from the legitimate case, and the script reports clean over zero bytes read.
+#
+# Not hypothetical, and the field remedy is what makes it sharp: `.local/` is gitignored, so a
+# task worktree never carries the denylist, and the fix adopted downstream is to export an
+# absolute PRIVACY_DENYLIST so workers can reach it from anywhere. That puts every worker in
+# exactly this case, where a stale or unreadable path buys a guard that says nothing.
+# Expected once fixed: 2, the same code the header already assigns to a usage error.
+d=$(repo declared-missing -)
+printf 'first line\nline with %s inside\n' "$TOKEN" > "$d/doc.md"; git -C "$d" add doc.md
+got=$( ( cd "$d" && PRIVACY_DENYLIST="$d/nowhere/denylist.txt" bash "$CHECK" doc.md >/dev/null 2>&1 ); echo $? )
+xok 2 "$got" 'PRIVACY_DENYLIST pointing at a missing file exits 0, as if none were configured'
 
 echo "== check-sync.sh: a copy that is behind must not look current =="
 csync() { ( bash "$SYNC" "$@" >/dev/null 2>&1 ); echo $?; }
