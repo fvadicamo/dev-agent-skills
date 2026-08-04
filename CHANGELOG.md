@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.2] - 2026-08-04
+
+### Security
+
+#### guardrails plugin
+- A comment in `tests/cases/06-docker-rm-flag.txt` named the **private** repository the
+  regression came from. The denylist did not catch it and could not: it holds node names,
+  home paths and private ranges, and a private repo name is none of those. Found by an audit
+  of the whole `gh` channel (33 sources, 1796 lines) run against the denylist first and then
+  against generic detectors, which is the only pass that could see it.
+- The same name is in a merged PR body, edited there too. Both remain in history: the commit
+  that added the line, and GitHub's edit history for the PR body. Fixing forward is what is
+  available without rewriting public history; the exposure is a project name, not a
+  credential. Evidence for #12, which is about the `gh` channel having no technical guard.
+- Plugin 1.7.5 -> **1.7.6**. No behaviour change: the hook is untouched.
+
+### Migration
+
+- **No recopy needed.** No shipped script changed in this release.
+
 ## [1.13.1] - 2026-08-03
 
 ### Security

@@ -11,7 +11,7 @@ ASK ::: - ::: docker run --rm -v /:/host busybox rm -rf /host/etc
 BLOCK ::: - ::: docker run --rm -v x:y img sh -c 'rm -rf /'
 BLOCK ::: - ::: docker volume rm myvol
 BLOCK ::: - ::: docker rm -v cont
-# --- regression: the remote/EXTRA mechanism behind Fix 1 (rene-agent) ---
+# --- regression: the remote/EXTRA mechanism behind Fix 1 ---
 ASK ::: - ::: ssh host 'rm -f /srv/myapp/.openclaw/x.bak'
 SILENT ::: /srv/myapp/.openclaw ::: ssh host 'rm -f /srv/myapp/.openclaw/x.bak'
 BLOCK ::: /srv/myapp/.openclaw ::: ssh host 'rm -rf /'
