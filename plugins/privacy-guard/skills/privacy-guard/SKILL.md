@@ -67,9 +67,22 @@ From the root of the target repo:
 4. Add the blocks from `references/pre-commit-snippet.yaml` to `.pre-commit-config.yaml`
    (gitleaks + privacy-denylist).
 5. Run `pre-commit install`, adding `--hook-type pre-push` if the repo uses push hooks.
-6. Verify: create a temporary file containing one token from the denylist and check that
-   `scripts/check_privacy.sh <file>` exits with code 1. An unfilled denylist (only comments)
-   makes the hook a silent no-op, so this step is what tells you the guard is actually armed.
+6. Verify: create a temporary file containing one token from the denylist, **stage it**, and
+   check that `scripts/check_privacy.sh <file>` exits with code 1. An unfilled denylist (only
+   comments) makes the hook a silent no-op, so this step is what tells you the guard is
+   actually armed. Check the other direction too — a file with no token must exit 0 — or you
+   have only shown that the script can fail, not that it discriminates.
+
+   > **Put a token in that file, not a pattern.** The denylist holds extended regexes, and
+   > most of them are anchored (`\bexample\b`). Writing that text verbatim does not match
+   > itself: the file then contains literal backslashes, the pattern finds nothing, and the
+   > script exits 0 — which reads as "the guard is not armed" when in fact the test was
+   > wrong. Strip the anchors and use the bare string the pattern is meant to catch. Measured
+   > on 2026-08-09 while arming three repos: 6 of 29 patterns happened to match their own
+   > text, so picking the first line of the denylist gave a false "not armed" verdict.
+   >
+   > Staging matters for the same reason: `check_privacy.sh` reads `git diff --cached`, so an
+   > unstaged file has no added lines and the script reports that nothing was checked.
 
 Design property: the denylist is NOT committed, because publishing the list would reveal the
 very tokens it protects. As a consequence the hook is a no-op for external contributors and
