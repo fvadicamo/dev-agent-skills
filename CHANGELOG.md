@@ -5,6 +5,90 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-08-26
+
+### Added
+
+#### decision-records plugin (new, **0.1.0**)
+
+- A plugin with one skill, `decision-records`: it writes decision records (ADRs) by
+  proposing a draft and writing only after explicit approval, supersedes rather than
+  rewriting an accepted record, and validates a collection with `check-decisions.sh`
+  (exit 0 clean, 1 violations, 2 nothing to check). Eight checks, each printing a stable
+  code: `NAME`, `SECTION`, `STATUS`, `DRIFT`, `SUPERSEDE`, `DUPLICATE`, `INDEX`, `PORTABLE`.
+- **What is actually new about it, stated honestly.** ADR linters are not new and several
+  are more capable: mdbook-lint ships 17 ADR rules, madr-lint covers MADR v2 to v4 and ships
+  its own Claude skills, adrkit finds supersession cycles. They all validate against a
+  *published* spec, Nygard or MADR, chosen by auto-detecting between those. A collection
+  whose convention is neither has its own convention reported to it as violations. This one
+  deduces the filename scheme, the section set and the status form from the records present,
+  and needs no toolchain. The premise the work started from ("no skill validates an existing
+  collection") was false and is recorded here rather than quietly dropped.
+- **The deduction has a limit, and it is in the design.** The status *vocabulary* cannot be
+  deduced: "the allowed statuses are the ones in use" can never say no. So the deduced side
+  checks drift instead (`Accepted` beside `accepted`) and `--status` is the only way to
+  declare a vocabulary. Required sections use a **majority**, not an intersection, because
+  under an intersection one sloppy record erases the requirement for every other one.
+- **No `template.md` is written into the target repo.** A template beside the records is a
+  second home for the convention and the two diverge in silence. The most-installed prior
+  art creates one; this is a deliberate departure and the skill says so.
+- **No second denylist.** Private tokens stay `privacy-guard`'s job. `--portable` covers only
+  what breaks when a record is *copied*: absolute paths, and links that climb out of the
+  collection.
+- `tests/run.sh`, 67 cases, every check with a negative fixture. Against a stub that always
+  exits 0 it reports 25 passed, 42 failed.
+
+### Fixed
+
+#### decision-records plugin, before first release
+
+Two reviews ran against the first version, and between them they found the defects below,
+none of which the suite written alongside the implementation could see: a suite inherits its
+author's blind spots by construction. All are fixed and each has a case now.
+
+- **A status carried as a `- Status:` bullet was not recognised**, so every record of a
+  collection using that form got a `STATUS` violation. Reproduced on four real collections;
+  32 files on the machine where it was found. This is the failure this plugin exists to
+  prevent, produced by the plugin: a tool wrong about every record does not get corrected,
+  it gets switched off, and the other seven checks go with it.
+- Consequently the `STATUS` check is now **collection-aware**: a record with no status is out
+  of step only when its neighbours have one. When no record has one, that is a line in
+  *checks that did not run*, not a violation per record. No closed list of four shapes is
+  ever complete.
+- **An empty `## Status` section** made the check unable to fire and put the next heading
+  into the deduced vocabulary (`status vocabulary : ## accepted`).
+- **A heading with two consecutive spaces** produced a `SECTION` violation on every record of
+  an internally consistent collection: the majority vote rebuilt headings through awk with a
+  single-space separator while the per-record set kept both.
+- **`ADR-031-slug.md` was classified as "no scheme"**, silently switching `NAME` and
+  `DUPLICATE` off; and **free-form filenames did the same**. Both now report what did not run.
+- **log4brains' compact `YYYYMMDD-` date** fell into the numbered branch, so two records
+  written on one day were reported as a `DUPLICATE`, inventing the exact rule the tests
+  pin as one that must never be invented.
+- **`--portable` missed a bare absolute path** not followed by a further `/`, the shape a
+  sentence actually uses.
+- **`README.md` won the index race unconditionally**, so a collection whose index is
+  `index.md` and whose `README.md` is prose had every record reported as unindexed. The index
+  is now the candidate that actually links to records. **Reference-style links** are read too.
+- **A supersede link climbing out of the collection "resolved"**, because the path was
+  collapsed with `basename` before the existence test.
+- **The dated `NAME` guard had no negative fixture** and was the only `say` site in the
+  script that no case was attached to. Found by disabling all fifteen sites one at a time.
+- Every fix is held down by mutation: fourteen guards removed one at a time, each killing
+  exactly the cases written for it. Two cases had to be **re-anchored** because the first
+  mutation run killed fewer cases than expected: they were passing *beside* the guard they
+  named, which is the one thing reading the file again cannot reveal.
+
+### Changed
+
+- `.githooks/pre-commit` runs the new suite when anything under `plugins/decision-records/`
+  is staged. Without that line the suite would never have run at commit time, and this repo
+  has no CI.
+- `README.md` and `CLAUDE.md`: 7 skills across 5 plugins, three suites, `scripts/` added to
+  the architecture map, and a note that the mutation check is stronger than the
+  `CHECK_SCRIPT=` override where a suite claims to hold one specific guard down.
+- Marketplace `metadata.version` 1.13.2 -> **1.14.0**.
+
 ## [1.13.2] - 2026-08-04
 
 ### Security

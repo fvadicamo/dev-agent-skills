@@ -1,6 +1,6 @@
 # dev-agent-skills
 
-Agent skills and hooks for development workflows - Git, GitHub, skill authoring, safety guardrails, and public-repo privacy.
+Agent skills and hooks for development workflows - Git, GitHub, skill authoring, safety guardrails, public-repo privacy, and decision records.
 
 These skills are designed for [Claude Code](https://claude.com/claude-code), the CLI tool by Anthropic.
 
@@ -32,6 +32,7 @@ There are no official Anthropic skills for Git/GitHub workflows. This plugin fil
 /plugin install skill-authoring@dev-agent-skills
 /plugin install guardrails@dev-agent-skills
 /plugin install privacy-guard@dev-agent-skills
+/plugin install decision-records@dev-agent-skills
 ```
 
 ## How skills work
@@ -44,6 +45,7 @@ Skills are **model-invoked** - Claude automatically activates them based on your
 - "Address review comments" -> activates `github-pr-review`
 - "Help me create a skill" -> activates `creating-skills`
 - "Set up the privacy guard on this public repo" -> activates `privacy-guard`
+- "Record this decision" / "check our ADRs" -> activates `decision-records`
 
 ## Plugin: github-workflow
 
@@ -191,19 +193,48 @@ Setup is per-repo and scripted by the skill: copy `check_privacy.sh` into `scrip
 
 Note the deliberate trade-offs: the guard is client-side and only protects commits made from a machine that has the denylist; it scans what a commit adds, so it stops new leaks and does not audit history; and it does not cover pastes into the GitHub web UI. That is what the behavioral rules are for.
 
+## Plugin: decision-records
+
+For a repo that already keeps decision records (ADRs) and has stopped trusting them: numbers that collide, an index that no longer matches the directory, a record that says it was superseded and does not say by what. The skill writes records, and mainly holds a collection to **its own** convention.
+
+### decision-records
+
+**What it adds over Claude's default behavior:**
+
+| Without this skill | With this skill |
+|--------------------|-----------------|
+| A record gets written in whatever shape Claude reaches for | The filename scheme, section set and status form are read off the records already there, and reported before anything is written |
+| A draft gets written to disk and then discussed | Propose first, write only after explicit approval, write nothing at all if you decline |
+| Changing your mind means editing the old record | An accepted record is never rewritten: a new one is created and the old status becomes `superseded by <ref>` |
+| The index drifts from the directory in silence | Both directions are checked: a record absent from the index, and an index row pointing at a file that is not there |
+| "The ADRs look fine" is an impression | `check-decisions.sh` exits 0, 1 or 2, with a stable code per violation (`NAME`, `SECTION`, `STATUS`, `DRIFT`, `SUPERSEDE`, `DUPLICATE`, `INDEX`, `PORTABLE`) |
+| A collection with a house convention gets flagged for having one | The convention is deduced, not imposed; `--require` and `--status` are the only way a rule enters that the collection is not already following |
+
+```sh
+check-decisions.sh [--require "A,B"] [--status "a,b"] [--portable] DIR
+# 0 clean, 1 violations, 2 usage error or nothing to check
+```
+
+Where this sits next to what already exists. ADR linters are not new and some are much more capable: [mdbook-lint](https://joshrotenberg.com/mdbook-lint/rules/adr/index.html) ships 17 ADR rules, [madr-lint](https://github.com/knktkc/madr-lint) covers MADR v2 to v4 and ships its own Claude skills, [adrkit](https://github.com/mbeacom/adrkit) finds supersession cycles and contradicting decisions. They all validate against a **published spec**, Nygard or MADR, chosen by auto-detecting between those. A collection whose convention is neither, say date-prefixed filenames with a house section set, has its own convention reported to it as violations. That case is what this one is for, and it needs no toolchain: it is one bash script.
+
+Deliberate limits. It ships **no template file** into your repo, because a template beside the records is a second home for the convention and the two diverge in silence. It does **not** scan for private tokens: hostnames, instance names and identity are `privacy-guard`'s denylist, and a second copy of that list here would be the same mistake with worse consequences. `--portable` covers only what breaks when a record is *copied*: absolute paths, and links that climb out of the collection directory.
+
 ## Development
 
-Two plugins ship executable logic, and each has a regression suite:
+Three plugins ship executable logic, and each has a regression suite:
 
 ```sh
 bash plugins/guardrails/tests/run.sh        # guard-destructive.sh
 bash plugins/privacy-guard/tests/run.sh     # check_privacy.sh, check-sync.sh
+bash plugins/decision-records/tests/run.sh  # check-decisions.sh
 ```
 
-Both exit non-zero on failure and run on macOS and Linux. Each accepts an override
-(`GUARD_HOOK=`, `PRIVACY_SCRIPT=`, `SYNC_SCRIPT=`) that points it at a candidate script:
-point it at the version from before a fix and the suite must go red. A bench nobody has
-seen fail says nothing.
+All exit non-zero on failure and run on macOS and Linux. Each accepts an override
+(`GUARD_HOOK=`, `PRIVACY_SCRIPT=`, `SYNC_SCRIPT=`, `CHECK_SCRIPT=`) that points it at a
+candidate script: point it at the version from before a fix and the suite must go red. A
+bench nobody has seen fail says nothing. Stronger where a suite claims to hold one guard
+down: remove that guard from the real script and check that its case goes red and the
+others do not, because a case can pass beside the guard it names.
 
 After cloning the repo to work on either, enable the shared git hooks (they live in the
 versioned `.githooks/`, not in `.git/hooks/`):

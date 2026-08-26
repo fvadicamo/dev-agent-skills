@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-A collection of Claude Code agent skills and hooks for development workflows, distributed as a plugin marketplace. Contains 6 skills and 1 hook organized into 4 plugins:
+A collection of Claude Code agent skills and hooks for development workflows, distributed as a plugin marketplace. Contains 7 skills and 1 hook organized into 5 plugins:
 
 - **github-workflow** plugin: `git-commit`, `github-pr-creation`, `github-pr-merge`, `github-pr-review`
 - **skill-authoring** plugin: `creating-skills`
 - **guardrails** plugin: `guard-destructive` PreToolUse hook
 - **privacy-guard** plugin: `privacy-guard` skill (session rules + pre-commit denylist gate for public repos)
+- **decision-records** plugin: `decision-records` skill (writes ADRs, and validates a collection against the convention it already follows)
 
 Skills are model-invoked (Claude activates them based on user intent, not slash commands). The hook runs automatically on every Bash tool call.
 
@@ -26,11 +27,12 @@ plugins/
       <skill-name>/
         SKILL.md            # Main skill file (YAML frontmatter + markdown body)
         references/         # Optional deep-dive docs loaded on demand
+        scripts/            # Optional executables the skill runs in place
     hooks/                  # Hooks (guardrails plugin) - auto-discovered
       hooks.json            # Hook registration
       guard-destructive.sh  # Hook script, run via ${CLAUDE_PLUGIN_ROOT}
-    tests/                  # regression suite - guardrails and privacy-guard have one
-      run.sh                #   guardrails: cases/*.txt table; privacy-guard: inline
+    tests/                  # regression suite - three plugins have one
+      run.sh                #   guardrails: cases/*.txt table; the other two: inline
       cases/*.txt           #   (guardrails only)
 ```
 
@@ -100,15 +102,16 @@ them is how the numbers drifted five months without anything breaking.
 
 ## Testing
 
-Two plugins ship executable logic, and each has a regression suite. **Run the
+Three plugins ship executable logic, and each has a regression suite. **Run the
 suite of whatever you touched, before committing:**
 
 ```sh
 bash plugins/guardrails/tests/run.sh        # guard-destructive.sh
 bash plugins/privacy-guard/tests/run.sh     # check_privacy.sh, check-sync.sh
+bash plugins/decision-records/tests/run.sh  # check-decisions.sh
 ```
 
-Both exit non-zero on failure (usable in pre-commit / CI) and run on macOS and
+All exit non-zero on failure (usable in pre-commit / CI) and run on macOS and
 Linux. When you change behaviour, add cases that pin the new behaviour **and its
 failure modes**. For a guard the dangerous direction is the false negative, the
 one where nothing is printed and the commit goes through, so favour adversarial
@@ -117,10 +120,17 @@ whose only job is to say whether the guard was neutralised rather than fixed. A
 suite made only of cases that must pass goes green on a guard that guards
 nothing.
 
-Both suites accept an override that points them at a **candidate** version
-(`GUARD_HOOK=`, `PRIVACY_SCRIPT=`, `SYNC_SCRIPT=`). Use it to prove the suite can
-fail: point it at the version from before a fix, and it must go red. A bench
-nobody has seen fail says nothing.
+Every suite accepts an override that points it at a **candidate** version
+(`GUARD_HOOK=`, `PRIVACY_SCRIPT=`, `SYNC_SCRIPT=`, `CHECK_SCRIPT=`). Use it to
+prove the suite can fail: point it at the version from before a fix, and it must
+go red. A bench nobody has seen fail says nothing.
+
+Stronger than the override, where a suite claims to hold a specific guard down:
+**remove that guard from the real script and check that the case written for it
+goes red, and that the others do not.** A case can pass *beside* the guard it
+names, because something earlier short-circuits, and the override cannot tell you
+that. `plugins/decision-records/tests/README.md` records three such mutations and
+what each one kills.
 
 `plugins/privacy-guard/tests/` carries one **XFAIL** case, an open defect kept as
 an executable record. It does not fail the run; when the defect is fixed the
