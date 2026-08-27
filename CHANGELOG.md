@@ -89,6 +89,23 @@ author's blind spots by construction. All are fixed and each has a case now.
   `CHECK_SCRIPT=` override where a suite claims to hold one specific guard down.
 - Marketplace `metadata.version` 1.13.2 -> **1.14.0**.
 
+#### privacy-guard plugin, caught up here
+
+- **1.3.3 shipped without a release and this is where it reaches anyone.** Commit `23114c9`
+  bumped `plugins/privacy-guard/.claude-plugin/plugin.json` and its marketplace entry from
+  1.3.2 to 1.3.3 and changed `SKILL.md`, but there was no changelog entry, no
+  `privacy-guard--v1.3.3` tag, and `metadata.version` stayed at 1.13.2. So the content was on
+  the default branch and no version anyone reads had moved: exactly the drift
+  `check-version-bump.sh` exists to stop, one level up where nothing was watching.
+- The tag has been created retroactively at `23114c9`, where `plugin.json` and the
+  marketplace entry both read 1.3.3, which is the pair `claude plugin tag` validates.
+- What 1.3.3 actually changed, documentation only: the arming step of the setup procedure
+  now says to put a **token** in the test file, not a pattern. The denylist holds anchored
+  extended regexes, so writing one verbatim does not match itself, the script exits 0, and
+  that reads as "the guard is not armed" when in fact the test was wrong. Measured on
+  2026-08-09 while arming three repos: 6 of 29 patterns happened to match their own text.
+  `check_privacy.sh` itself is untouched and stays **1.2.1**.
+
 ## [1.13.2] - 2026-08-04
 
 ### Security
