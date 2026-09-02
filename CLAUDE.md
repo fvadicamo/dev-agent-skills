@@ -129,8 +129,10 @@ Stronger than the override, where a suite claims to hold a specific guard down:
 **remove that guard from the real script and check that the case written for it
 goes red, and that the others do not.** A case can pass *beside* the guard it
 names, because something earlier short-circuits, and the override cannot tell you
-that. `plugins/decision-records/tests/README.md` records three such mutations and
-what each one kills.
+that. `plugins/decision-records/tests/README.md` records every such mutation run
+against that script and what each one kills. It carries no count here on purpose:
+a number in a pointer goes stale in the file that does not own it, and this one
+did, saying three while the table had grown to fourteen.
 
 `plugins/privacy-guard/tests/` carries one **XFAIL** case, an open defect kept as
 an executable record. It does not fail the run; when the defect is fixed the

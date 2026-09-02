@@ -39,6 +39,7 @@
 set -uo pipefail
 
 REQUIRE=""
+REQUIRE_GIVEN=0
 STATUS_VOCAB=""
 PORTABLE=0
 DIR=""
@@ -50,7 +51,7 @@ usage() {
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --require) [ "$#" -ge 2 ] || usage; REQUIRE="$2"; shift 2 ;;
+        --require) [ "$#" -ge 2 ] || usage; REQUIRE="$2"; REQUIRE_GIVEN=1; shift 2 ;;
         --status)  [ "$#" -ge 2 ] || usage; STATUS_VOCAB="$2"; shift 2 ;;
         --portable) PORTABLE=1; shift ;;
         -h|--help) usage ;;
@@ -72,6 +73,8 @@ lower() { tr '[:upper:]' '[:lower:]'; }
 # The record body: frontmatter and fenced code removed. Both matter. A '## Context' inside a
 # fenced example is not a section of this record, and counting it would let a record that
 # merely SHOWS the convention satisfy it.
+strip_fences() { awk '/^[[:space:]]*```/ { f = !f; next } !f' "$1"; }
+
 body_of() {
     awk '
         NR == 1 && $0 == "---" { fm = 1; next }
@@ -120,34 +123,60 @@ headings_of() { body_of "$1" | grep -E '^##[[:space:]]+' | sed -e 's/^##*[[:spac
 status_of() {
     local v
     v=$(frontmatter_of "$1" | grep -iE '^[[:space:]]*status:' | head -1 | sed 's/^[^:]*:[[:space:]]*//')
-    [ -n "$v" ] || v=$(body_of "$1" | grep -iE '^[[:space:]]*[-*+][[:space:]]+(\*\*)?status(\*\*)?[[:space:]]*:' | head -1 | sed 's/^[^:]*:[[:space:]]*//')
-    [ -n "$v" ] || v=$(body_of "$1" | grep -iE '^[[:space:]]*\*\*Status\*\*[[:space:]]*:' | head -1 | sed 's/^[^:]*:[[:space:]]*//')
+    [ -n "$v" ] || v=$(body_of "$1" | grep -iE '^ {0,3}[-*+][[:space:]]+[*_]{0,2}status[*_]{0,2}[[:space:]]*:' | head -1 | sed 's/^[^:]*:[*_[:space:]]*//')
+    [ -n "$v" ] || v=$(body_of "$1" | grep -iE '^ {0,3}[*_]{1,2}Status[*_]{1,2}[[:space:]]*:' | head -1 | sed 's/^[^:]*:[*_[:space:]]*//')
     [ -n "$v" ] || v=$(body_of "$1" | awk '
         tolower($0) ~ /^##[[:space:]]+status[[:space:]]*$/ { grab = 1; next }
-        grab && /^##[[:space:]]/ { exit }
+        grab && /^#/ { exit }
         grab && /^[[:space:]]*$/ { next }
         grab { print; exit }
     ')
     printf '%s' "$v" | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*$//'
 }
 
-# The .md files an index links to, as basenames. Two shapes, because both are legitimate
-# markdown and a parser that knows one reports every record of a collection using the other
-# as missing:
+# The .md files an index links to, as the path each link WRITES. Two shapes, because both
+# are legitimate markdown and a parser that knows one reports every record of a collection
+# using the other as missing:
 #   inline            [0001](0001-slug.md)
 #   reference-style   [0001][a]   ...   [a]: 0001-slug.md
+#
+# Two things this deliberately does NOT do, both of them defects it used to have:
+#   - it does not reduce the target to a basename. Doing so made '../elsewhere/0003-x.md'
+#     count as a link to the local 0003-x.md (so an unlisted record read as indexed) and
+#     made a link to an existing '../docs/design.md' read as dangling. Same collapse the
+#     SUPERSEDE check was corrected for; it survived here because the correction was applied
+#     to one of the two call sites.
+#   - it does not read the index's fenced examples. An index that documents its own row
+#     format is an ordinary shape, and its example row was reported as a link to a file that
+#     is not on disk.
 index_links() {
     {
-        grep -oE '\]\([^)]+\)' "$1" | sed -e 's/^](//' -e 's/)$//'
-        grep -oE '^[[:space:]]*\[[^]]+\][[:space:]]*:[[:space:]]*[^[:space:]]+' "$1" | sed 's/.*][[:space:]]*:[[:space:]]*//'
+        strip_fences "$1" | grep -oE '\]\([^)]+\)' | sed -e 's/^](//' -e 's/)$//'
+        strip_fences "$1" | grep -oE '^[[:space:]]*\[[^]]+\][[:space:]]*:[[:space:]]*[^[:space:]]+' | sed 's/.*][[:space:]]*:[[:space:]]*//'
     } 2>/dev/null | sed -e 's/#.*$//' -e 's/[[:space:]].*$//' \
-        | grep -E '\.md$' | grep -v '://' | sed -e 's|.*/||' | sort -u
+        | grep -E '\.md$' | grep -v '://' | sed -e 's|^\./||' | sort -u
+}
+
+# Does this candidate link to at least one RECORD of this collection? "Carries any .md link"
+# was not enough: one ordinary '[the guide](../CONTRIBUTING.md)' in a prose README put it
+# back in front of the real index.md, which is the very race the candidate choice was added
+# to settle.
+links_a_record() {
+    local l
+    while IFS= read -r l; do
+        [ -n "$l" ] || continue
+        case "$l" in */*) continue ;; esac
+        [ -f "$DIR/$l" ] && printf '%s\n' "$records" | grep -qxF "$DIR/$l" && return 0
+    done <<EOF
+$(index_links "$1")
+EOF
+    return 1
 }
 
 status_form_of() {
     if frontmatter_of "$1" | grep -qiE '^[[:space:]]*status:'; then echo frontmatter
-    elif body_of "$1" | grep -qiE '^[[:space:]]*[-*+][[:space:]]+(\*\*)?status(\*\*)?[[:space:]]*:'; then echo bullet
-    elif body_of "$1" | grep -qiE '^[[:space:]]*\*\*Status\*\*[[:space:]]*:'; then echo bold-field
+    elif body_of "$1" | grep -qiE '^ {0,3}[-*+][[:space:]]+[*_]{0,2}status[*_]{0,2}[[:space:]]*:'; then echo bullet
+    elif body_of "$1" | grep -qiE '^ {0,3}[*_]{1,2}Status[*_]{1,2}[[:space:]]*:'; then echo bold-field
     elif body_of "$1" | grep -qiE '^##[[:space:]]+status[[:space:]]*$'; then echo section
     else echo none; fi
 }
@@ -190,12 +219,27 @@ RE_DATED='^([0-9]{4}-[0-9]{2}-[0-9]{2}|[0-9]{8})[-_].+\.md$'
 RE_PREFIXED='^[A-Za-z]+[-_][0-9]+[-_].+\.md$'
 RE_NUMBERED='^[0-9]+[-_].+\.md$'
 
+# A leading word before the number is a SCHEME only when the collection shares that word.
+# Matching the shape alone read free-form titles as a numbered scheme: use-2-phase-commit.md
+# beside move-2-week-sprints.md became "prefixed", their identifier became 2, and the two
+# were reported as a duplicate -- inventing the rule the tests pin as one never to invent.
+# So the prefix is deduced like everything else: the dominant one, and only if shared.
+PREFIX=""
+PREFIX=$(while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    basename "$f" | grep -E "$RE_PREFIXED" | sed -n 's/^\([A-Za-z][A-Za-z]*\)[-_].*/\1/p' | lower
+done <<EOF | sort | uniq -c | sort -rn | awk '$1 >= 2 { print $2; exit }'
+$records
+EOF
+)
+
 dated=0; prefixed=0; numbered=0; other=0
 while IFS= read -r f; do
     [ -n "$f" ] || continue
     b=$(basename "$f")
+    bpfx=$(printf '%s' "$b" | sed -n 's/^\([A-Za-z][A-Za-z]*\)[-_].*/\1/p' | lower)
     if   printf '%s' "$b" | grep -qE "$RE_DATED";    then dated=$((dated + 1))
-    elif printf '%s' "$b" | grep -qE "$RE_PREFIXED"; then prefixed=$((prefixed + 1))
+    elif printf '%s' "$b" | grep -qE "$RE_PREFIXED" && [ -n "$PREFIX" ] && [ "$bpfx" = "$PREFIX" ]; then prefixed=$((prefixed + 1))
     elif printf '%s' "$b" | grep -qE "$RE_NUMBERED"; then numbered=$((numbered + 1))
     else other=$((other + 1)); fi
 done <<EOF
@@ -230,7 +274,7 @@ done <<EOF
 $records
 EOF
 
-if [ -n "$REQUIRE" ]; then
+if [ "$REQUIRE_GIVEN" = 1 ]; then
     printf '%s' "$REQUIRE" | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
         | lower | grep -v '^$' | sort -u > "$T/required"
     required_how="declared with --require"
@@ -271,7 +315,7 @@ vocab=$(cut -f2 "$T/statuses" | awk '{print $1}' | grep -v '^$' | lower | sort -
 index=""
 for cand in "$DIR/README.md" "$DIR/readme.md" "$DIR/index.md"; do
     [ -f "$cand" ] || continue
-    [ -n "$(index_links "$cand")" ] || continue
+    links_a_record "$cand" || continue
     index="$cand"; break
 done
 
@@ -308,6 +352,7 @@ id_of() {
     case "$scheme" in
         numbered) basename "$1" | sed -n 's/^0*\([0-9][0-9]*\)[-_].*/\1/p' ;;
         prefixed) basename "$1" | sed -n 's/^[A-Za-z]*[-_]0*\([0-9][0-9]*\)[-_].*/\1/p' ;;
+        # dated and free carry no identifier: see the DUPLICATE block.
     esac
 }
 
@@ -348,8 +393,11 @@ EOF
     prefixed)
         while IFS= read -r f; do
             [ -n "$f" ] || continue
-            printf '%s' "$(basename "$f")" | grep -qE "$RE_PREFIXED" \
-                || say "NAME $f: not <prefix>-NNN-slug.md, which $scheme_count of $n records use."
+            b=$(basename "$f")
+            bpfx=$(printf '%s' "$b" | sed -n 's/^\([A-Za-z][A-Za-z]*\)[-_].*/\1/p' | lower)
+            if ! printf '%s' "$b" | grep -qE "$RE_PREFIXED" || [ "$bpfx" != "$PREFIX" ]; then
+                say "NAME $f: not $PREFIX-NNN-slug.md, which $scheme_count of $n records use."
+            fi
         done <<EOF
 $records
 EOF
@@ -357,6 +405,17 @@ EOF
 esac
 
 # --- SECTION -----------------------------------------------------------------------------
+# Three outcomes, and the middle one used to be silent. A collection where no heading
+# reaches the majority has no section convention, which is a fact about the collection;
+# passing --require and having it resolve to nothing is a fact about the INVOCATION, and
+# the same asymmetry --status already reports. Silence on either read as "sections checked".
+if [ ! -s "$T/required" ]; then
+    if [ "$REQUIRE_GIVEN" = 1 ]; then
+        say "SECTION $DIR: --require was given as '$REQUIRE' but names no section, so the declaration holds nothing."
+    else
+        skipped "SECTION: no heading appears in more than half of the $n records, so this collection has no section convention to be held to."
+    fi
+fi
 if [ -s "$T/required" ]; then
     i=0
     while IFS= read -r f; do
@@ -526,7 +585,10 @@ EOF
 
     while IFS= read -r b; do
         [ -n "$b" ] || continue
-        case "$(printf '%s' "$b" | lower)" in readme.md|index.md|template.md) continue ;; esac
+        case "$(basename "$b" | lower)" in readme.md|index.md|template.md) continue ;; esac
+        # Resolved as the link WRITES it, relative to the collection. A link out of the
+        # directory that does exist is not a dangling link; --portable is what says it will
+        # break on a copy. Two questions, two checks.
         [ -f "$DIR/$b" ] || say "INDEX $index: links to $b, which is not on disk."
     done < "$T/indexed"
 fi
@@ -548,7 +610,7 @@ if [ "$PORTABLE" -eq 1 ]; then
         while IFS= read -r hit; do
             [ -n "$hit" ] || continue
             say "PORTABLE $f:$hit"
-        done < <(grep -nE '(/home/|/Users/)[^/[:space:]]+' "$f" | sed 's/$/  <- absolute path, valid only on the machine that wrote it/')
+        done < <(grep -nE '(^|[[:space:]"'"'"'(\[])(/home/|/Users/)[^/[:space:]]+' "$f" | sed 's/$/  <- absolute path, valid only on the machine that wrote it/')
         while IFS= read -r hit; do
             [ -n "$hit" ] || continue
             say "PORTABLE $f:$hit"

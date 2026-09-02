@@ -155,6 +155,13 @@ skips() {  # $1 substring, then the arguments to pass to the script
     bash "$CHECK" "$@" 2>&1 >/dev/null | grep -c -- "$sub"
 }
 
+# How many violation lines of one code. An exit code cannot distinguish "reported once" from
+# "reported twice", and a duplicated report reads as two defects.
+count_code() {  # $1 code, then the arguments
+    local code="$1"; shift
+    bash "$CHECK" "$@" 2>/dev/null | grep -c "^$code "
+}
+
 ok() {  # $1 expected exit, $2 got, $3 label
     if [ "$1" = "$2" ]; then printf '  ok    %-3s %s\n' "$2" "$3"; pass=$((pass + 1))
     else printf '  FAIL  expected=%s got=%s  %s\n' "$1" "$2" "$3"; fail=$((fail + 1)); fi
@@ -412,6 +419,122 @@ d=$(nygard outlink)
 sed -i.bak 's|^accepted$|superseded by [0003](../../elsewhere/0003-decision-3.md)|' "$d/0001-decision-1.md"
 rm -f "$d"/*.bak
 because 1 SUPERSEDE "$d"
+
+echo "== round three: what a second independent review found in the CORRECTIONS =="
+# Every case below holds down a defect introduced by a FIX for an earlier defect. Two of
+# them are the earlier defect restored in the other half of the code. That is the pattern
+# worth naming: a correction is new code, and new code is where the next defect goes.
+
+# The index race, restored. The fix said "the candidate that links to RECORDS" and the code
+# said "carries any .md link", so one ordinary link in a prose README beat the real index.
+# The old fixture used a README with NO links, the single case the defect does not cover.
+d=$(nygard idxrace); rm "$d/README.md"
+printf '# About these decisions\n\nProse. See [the guide](../CONTRIBUTING.md) to contribute.\n' > "$d/README.md"
+{ echo "# Index"; for i in 1 2 3; do echo "- [000$i](000$i-decision-$i.md)"; done; } > "$d/index.md"
+ok 0 "$(run "$d")" 'a prose README carrying an unrelated .md link does not beat the real index.md'
+
+# basename() collapsing, fixed in SUPERSEDE and left in the index parser. Both directions.
+d=$(nygard idxbase); mkdir -p "$d/../elsewhere-$$"
+{ echo "# Decisions"; echo "- [0001](0001-decision-1.md)"; echo "- [0002](0002-decision-2.md)"
+  echo "- [0003](../elsewhere-$$/0003-decision-3.md)"; } > "$d/README.md"
+because 1 INDEX "$d"
+d=$(nygard idxout); mkdir -p "$d/../docs-$$"; printf '# design\n' > "$d/../docs-$$/design.md"
+{ echo "# Decisions"; for i in 1 2 3; do echo "- [000$i](000$i-decision-$i.md)"; done
+  echo "See also [the design notes](../docs-$$/design.md)."; } > "$d/README.md"
+ok 0 "$(run "$d")" 'an index link out of the collection that does resolve is not dangling'
+
+# The prefixed NAME guard shipped with no case, which is the SAME defect the previous review
+# found on the dated branch. A correction that adds a say site owes it a fixture.
+d=$(prefixed pfxname)
+printf '# loose\n\n## Status\n\naccepted\n\n## Context\n\nx\n\n## Decision\n\ny\n' > "$d/loose-note.md"
+because 1 NAME "$d"
+
+# "- **Status:** accepted": the closing emphasis landed inside the value, the vocabulary
+# became "**", and --status then fired on every record of a legitimate collection.
+d=$(mktemp -d "$T/boldbullet.XXXX")
+for i in 1 2 3; do printf '# %s\n\n- **Status:** accepted\n- **Date:** 2026-01-0%s\n\n## Context\n\nx\n\n## Decision\n\ny\n' "$i" "$i" > "$d/000$i-d$i.md"; done
+ok 0 "$(run --status "accepted,proposed" "$d")" 'a "- **Status:** value" bullet yields the value, not the emphasis'
+got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c 'status vocabulary : accepted$')
+ok 1 "$got" 'and the deduced vocabulary is the status, not a run of asterisks'
+
+# A level-3 heading under ## Status leaked exactly like the level-2 one the earlier fix
+# stopped at. Stopping at "^#" closes the family instead of one member of it.
+d=$(nygard h3)
+for f in "$d"/000*.md; do sed -i.bak 's/^accepted$/### Accepted/' "$f"; done; rm -f "$d"/*.bak
+got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c 'status vocabulary : none found')
+ok 1 "$got" 'a level-3 heading does not leak into the status value'
+
+# SECTION could silently not run, in the one block whose stated job is to say what did not.
+d=$(mktemp -d "$T/nosections.XXXX")
+i=0
+for s in alpha beta gamma; do i=$((i + 1)); printf -- '---\nstatus: accepted\n---\n\n# %s\n\n## %s\n\nx\n' "$s" "$s" > "$d/000$i-$s.md"; done
+ok 0 "$(run "$d")" 'a collection where no heading reaches the majority is not a violation'
+ok 1 "$(skips 'SECTION:' "$d")" 'but SECTION is named as not run, like every other check that cannot apply'
+# And --require resolving to nothing is a statement about the INVOCATION, not the collection.
+because 1 SECTION --require "," "$d"
+
+# A prefix is a scheme only if the collection SHARES it. Matching the shape alone read
+# free-form titles as numbered and invented the DUPLICATE the README forbids inventing.
+d=$(mktemp -d "$T/freetitles.XXXX")
+for x in use-2-phase-commit move-2-week-sprints adopt-3-tier-architecture; do
+    printf '# %s\n\n## Status\n\naccepted\n\n## Context\n\nx\n\n## Decision\n\ny\n' "$x" > "$d/$x.md"
+done
+ok 0 "$(run "$d")" 'free-form titles carrying a digit are not a prefixed scheme, and not a duplicate'
+got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c 'filename scheme   : free-form')
+ok 1 "$got" 'they are reported as free-form'
+
+# --portable fired on any URL carrying a /home/ path segment.
+d=$(nygard porturl); printf '\nSee https://docs.example.com/home/getting-started for the rationale.\n' >> "$d/0001-decision-1.md"
+ok 0 "$(run --portable "$d")" 'a URL with a /home/ segment is not an absolute path on this machine'
+printf '\nThe workspace is /home/someuser here.\n' >> "$d/0002-decision-2.md"
+because 1 PORTABLE --portable "$d"
+
+# An index that documents its own row format had its example reported as a dead link.
+d=$(nygard idxfence)
+{ echo "# Decisions"; for i in 1 2 3; do echo "- [000$i](000$i-decision-$i.md)"; done
+  echo; echo "To add one, append a row like:"; echo; echo '"'"'```markdown'"'"'
+  echo "- [0004](0004-your-decision.md)"; echo '"'"'```'"'"'; } > "$d/README.md"
+ok 0 "$(run "$d")" "an index's own fenced example is not a link to a missing file"
+
+echo "== five guards the suite was not holding, found by mutating what the table does not cover =="
+# One dangling reference reported twice reads as two defects. The status line is in the scan
+# twice over when the collection keeps its status in a section.
+d=$(nygard dupreport); sed -i.bak 's|^accepted$|superseded by [0009](0009-gone.md)|' "$d/0001-decision-1.md"; rm -f "$d"/*.bak
+ok 1 "$(count_code SUPERSEDE "$d")" 'a single dangling supersede reference is reported once, not twice'
+
+# A record that merely SHOWS the convention in a fenced block must not satisfy it. The file
+# argues this at length and nothing pinned it.
+d=$(nygard fenced)
+printf '# 2\n\n## Status\n\naccepted\n\n## Context\n\nLike this:\n\n```markdown\n## Consequences\n\nnot a real section\n```\n\n## Decision\n\ny\n' > "$d/0002-decision-2.md"
+because 1 SECTION "$d"
+# Same hole through an INDENTED block, which is four spaces and is code by the markdown rule.
+d=$(bullets indented)
+printf '# 3\n\n## Context\n\nOur house template is:\n\n    - Status: proposed\n\n## Decision\n\ny\n' > "$d/2026-03-30-choice.md"
+because 1 STATUS "$d"
+
+# --require is matched against headings that were lowercased; the declaration must be too.
+d=$(nygard reqcase)
+ok 0 "$(run --require "Context,Decision" "$d")" 'a --require written in title case matches the deduced lowercase headings'
+
+# The reverse index check must skip the furniture it excluded from the records, or an index
+# that links its own template reports it as a missing record.
+d=$(nygard idxtemplate); echo "- [template](template.md)" >> "$d/README.md"
+ok 0 "$(run "$d")" 'an index linking a template.md that is not on disk is not a dangling record link'
+
+# Headings written with a trailing colon are the same heading.
+d=$(nygard coloned)
+sed -i.bak -e 's/^## Context$/## Context:/' -e 's/^## Decision$/## Decision:/' "$d/0002-decision-2.md"; rm -f "$d"/*.bak
+ok 0 "$(run "$d")" 'a heading written "## Context:" is the same section as "## Context"'
+
+echo "== the promise that every check says when it cannot apply, checked mechanically =="
+# SKILL.md states it as a universal. A universal in prose is exactly what rots without
+# anyone noticing, so it is asserted against the script instead of trusted: every violation
+# code must also appear in a skipped() line, or a check can go quiet with nothing saying so.
+for code in NAME SECTION STATUS DRIFT SUPERSEDE DUPLICATE INDEX PORTABLE; do
+    got=$(grep -c "skipped \"[A-Z, ]*$code" "$here/../skills/decision-records/scripts/check-decisions.sh")
+    [ "$got" -gt 0 ] && got=1
+    ok 1 "$got" "$code has a 'checks that did not run' line for the case where it cannot apply"
+done
 
 echo "== the template and the index are not records =="
 d=$(nygard furniture); printf -- '---\nstatus: x\n---\n# T\n\n## Placeholder\n' > "$d/template.md"

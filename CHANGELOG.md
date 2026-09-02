@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-09-02
+
+### Fixed
+
+#### decision-records plugin, **0.1.0 -> 0.2.0**
+
+A third independent review, this one reading the **corrections** made after the second, found
+that two of those corrections had restored the defect they removed in the other half of the
+code. A correction is new code, and new code is where the next defect goes.
+
+- **The index race came back.** The fix said "choose the candidate that links to records" and
+  the code said "carries any `.md` link", so one ordinary `[the guide](../CONTRIBUTING.md)`
+  in a prose `README.md` beat the real `index.md` and every record reported as unindexed.
+  The fixture could not see it: it used a README with *no* links, the one case the defect
+  does not cover.
+- **`basename` collapsing was fixed at one of its two call sites.** SUPERSEDE got the fix,
+  the index parser kept it, so a link to `../elsewhere/0003-x.md` made the local `0003-x.md`
+  read as indexed, and a link to an existing `../docs/design.md` read as dangling.
+- **The fix for one uncovered guard added another**: the new prefixed `NAME` guard shipped
+  with no case, exactly the defect the previous round had found on the dated branch.
+- `- **Status:** accepted` matched the new bullet regex and yielded `** accepted`, so the
+  deduced vocabulary became `**` and `--status` fired on every record of a legitimate
+  collection. One asterisk away from the shape the correction was written to fix.
+- `RE_PREFIXED` read free-form titles as a numbered scheme: `use-2-phase-commit.md` beside
+  `move-2-week-sprints.md` became "prefixed", their identifier became `2`, and the two were
+  reported as a duplicate. A prefix is now a scheme only when the collection **shares** it.
+- `--portable` fired on any URL carrying a `/home/` path segment.
+- The index parser read the index's own fenced examples, so an index documenting its row
+  format reported its example as a link to a missing file.
+- A level-3 heading leaked into the status value exactly as the level-2 one had.
+- `SECTION` could silently not run, inside the block whose stated purpose is to say what did
+  not run; and `--require` resolving to nothing was silent where `--status` already spoke.
+- An indented code block could supply a record's status, because four-space indentation is
+  code by the markdown rule and the status patterns allowed any leading whitespace.
+
+### Changed
+
+- **Guard coverage is now measured, not sampled.** Every `say` site in the script, all
+  eighteen, is mutated one at a time and each must produce at least one failing case. Both
+  uncovered guards found so far were found this way and neither was the one anyone would
+  have picked. `plugins/decision-records/tests/README.md` carries the one-liner, including
+  the warning that it must run under bash: in zsh the loop does not split and reports
+  "none uncovered" having tested nothing.
+- **A prose promise is now a check.** SKILL.md states that every check says when it cannot
+  apply; the suite asserts it against the script, one case per code.
+- 67 cases -> **96**. Against a stub that always exits 0: 43 passed, 53 failed.
+- Marketplace `metadata.version` 1.14.0 -> **1.15.0**.
+
+### Corrected in the 1.14.0 entry
+
+- It said the dated `NAME` guard "was the only `say` site in the script that no case was
+  attached to". That was true when written and false one correction later.
+
 ## [1.14.0] - 2026-08-26
 
 ### Added
@@ -72,8 +125,10 @@ author's blind spots by construction. All are fixed and each has a case now.
   is now the candidate that actually links to records. **Reference-style links** are read too.
 - **A supersede link climbing out of the collection "resolved"**, because the path was
   collapsed with `basename` before the existence test.
-- **The dated `NAME` guard had no negative fixture** and was the only `say` site in the
-  script that no case was attached to. Found by disabling all fifteen sites one at a time.
+- **The dated `NAME` guard had no negative fixture**, found by disabling every `say` site
+  one at a time. It was not the last one: the fix for the prefixed scheme added another
+  uncovered guard, caught the same way a round later. The method is now run over every site
+  rather than over the ones anyone thought to check.
 - Every fix is held down by mutation: fourteen guards removed one at a time, each killing
   exactly the cases written for it. Two cases had to be **re-anchored** because the first
   mutation run killed fewer cases than expected: they were passing *beside* the guard they

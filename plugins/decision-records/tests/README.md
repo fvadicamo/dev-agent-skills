@@ -70,12 +70,15 @@ The override is what makes this bench provable rather than decorative:
 ```sh
 printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/always-ok.sh
 CHECK_SCRIPT=/tmp/always-ok.sh bash plugins/decision-records/tests/run.sh
-# -- 25 passed, 42 failed --
+# -- 43 passed, 53 failed --
 ```
 
 A bench nobody has seen fail says nothing. Pointing it at a script that always exits 0
-turns 42 of the 67 cases red; the 25 that stay green are the ones asserting a clean
-collection passes, which is exactly what a stub gets right by accident.
+turns 53 of the 96 cases red; the 43 that stay green are the ones asserting a clean
+collection passes (plus the eight that read the script's own text), which is exactly what a
+stub gets right by accident. That ratio is the reason the coverage sweep below exists: a
+stub passing 43 cases is a reminder that "the suite is green" and "the guards are held" are
+two different statements.
 
 Stronger, and the check worth repeating after a change: **remove a guard from the real
 script and confirm the case written for it goes red.** A test can pass *beside* the guard it
@@ -98,6 +101,10 @@ claims to hold, because something earlier short-circuits. Measured on this suite
 | `basename` collapsing the supersede link path | the out-of-collection `SUPERSEDE` case |
 | the dated `NAME` guard neutered | the dated `NAME` case |
 
+Round three added its own, and they are not listed one by one because the sweep below
+supersedes the practice of listing them: every `say` site is now mutated, all eighteen, and
+each produces at least one failure.
+
 Each mutation kills exactly the cases written for it, which is what says the cases are
 attached to the guards they name. Two of them are worth reading twice, because both times
 the first run killed **fewer** cases than expected and the case had to be re-anchored:
@@ -113,3 +120,40 @@ the first run killed **fewer** cases than expected and the case had to be re-anc
 
 In both cases the case was passing *beside* the guard it claimed to hold, and only mutation
 could say so. Reading the file again would not have.
+
+## Coverage of the guards is measured, not sampled
+
+Picking mutations by hand finds the guards you thought of. A second independent review found
+an uncovered guard that way and it was not the one the first review had found, so the check
+is now run over **every** `say` site in the script, one at a time:
+
+```sh
+grep -n 'say "' skills/decision-records/scripts/check-decisions.sh | cut -d: -f1 |
+while read -r L; do
+    sed "${L}s/say \"/true \"/" skills/decision-records/scripts/check-decisions.sh > /tmp/m.sh
+    CHECK_SCRIPT=/tmp/m.sh bash tests/run.sh | tail -1
+done
+```
+
+Every line must produce at least one failure. A site that leaves the suite green is a guard
+nothing holds down, and it is invisible to reading, to the `CHECK_SCRIPT=` override and to a
+hand-picked mutation list. Run this under **bash**: in zsh a `for` over an unquoted variable
+does not split, the loop runs once with a broken `sed`, and the run reports "none uncovered"
+having tested nothing.
+
+## What three reviews cost, and why the count is the point
+
+The first version of this script was written with its suite. Three independent readings
+followed, and each found defects the previous one had not:
+
+| Round | Found by | What it found |
+|---|---|---|
+| 1 | a peer session, on four real collections | a status form that made the validator wrong about **every** record of a legitimate collection |
+| 2 | a fresh-context read of the diff | seven code defects and one guard with no case |
+| 3 | a fresh-context read of the **corrections** | two of round 2's fixes had restored the defect they removed in the other half of the code, three widened patterns had new false positives, and the fix for one uncovered guard had added another |
+
+Round 3 is the one to read twice. A correction is new code, and new code is where the next
+defect goes; a fix applied to one of two call sites leaves the defect alive at the other.
+That is why the coverage sweep above is run over every site rather than over the sites a
+correction happened to touch.
+
