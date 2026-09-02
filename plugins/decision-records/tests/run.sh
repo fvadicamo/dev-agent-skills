@@ -536,6 +536,20 @@ for code in NAME SECTION STATUS DRIFT SUPERSEDE DUPLICATE INDEX PORTABLE; do
     ok 1 "$got" "$code has a 'checks that did not run' line for the case where it cannot apply"
 done
 
+echo "== furniture is excluded by a pattern, and the exclusion is narrow on purpose =="
+# Found by running the validator over REAL collections instead of over fixtures: the
+# exclusion was three literals and missed ADR_template.md, 8 files on the machine where it
+# was found. The narrowness is the other half: three real records on that same disk carry
+# "template" in their slug, and a *template* match would have excluded all three.
+d=$(nygard furniture-adr); printf '# T\n\n## Status\n\nproposed\n' > "$d/ADR_template.md"
+ok 0 "$(run "$d")" 'ADR_template.md beside the records is furniture, not a NAME violation'
+ok 1 "$(skips 'furniture' "$d")" 'and the run names what it excluded, because deciding not to look is a decision'
+d=$(nygard furniture-slug)
+printf '# 4\n\n## Status\n\naccepted\n\n## Context\n\nx\n\n## Decision\n\ny\n\n## Consequences\n\nz\n' > "$d/0004-prompt-template-architecture.md"
+echo "- [0004](0004-prompt-template-architecture.md)" >> "$d/README.md"
+got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c '(4 records)')
+ok 1 "$got" 'a record whose SLUG contains "template" is still a record, not furniture'
+
 echo "== the template and the index are not records =="
 d=$(nygard furniture); printf -- '---\nstatus: x\n---\n# T\n\n## Placeholder\n' > "$d/template.md"
 ok 0 "$(run "$d")" 'a template.md beside the records is excluded, not validated as one'

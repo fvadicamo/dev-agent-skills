@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.1] - 2026-09-02
+
+### Fixed
+
+#### decision-records plugin, **0.2.0 -> 0.2.1**
+
+- **`ADR_template.md` was reported as a `NAME` violation.** The furniture exclusion was a
+  list of three literals (`readme.md`, `index.md`, `template.md`) and missed it. Found by
+  running the validator over **real collections** rather than over its own fixtures, which
+  is the pass a suite written beside an implementation cannot perform: 8 files in that shape
+  on the machine where it was found, and the tool was wrong about every collection using it.
+  This repo's own coding rules name the shape ("exclusion lists are the common trap: they
+  cover the cases you thought of, on the day you wrote it"), and it was one anyway.
+- The exclusion is a pattern now, and **narrow on purpose**. Measured on the same disk,
+  three real records carry the word in their slug
+  (`ADR-0020-prompt-template-architecture.md` and two others), so matching `*template*`
+  would have traded one false positive for three false negatives, the worse direction for a
+  guard. The word must be the whole name or a whole leading or trailing component of it.
+  Both directions have a case.
+- **What the exclusion removes is now named** in *checks that did not run*. Deciding not to
+  look at a file is a decision, and this script exists to refuse silent ones.
+- The line that reports it was written **above** the function it calls, so it was a bare
+  `command not found` on stderr, and on a collection with no furniture it would not have
+  appeared at all. Fixed, and it is the failure shape worth remembering: a defect visible
+  only on the inputs that exercise it.
+
+### Changed
+
+- 96 cases -> **99**. Against a stub that always exits 0: 44 passed, 55 failed.
+  Marketplace `metadata.version` 1.15.0 -> **1.15.1**.
+
 ## [1.15.0] - 2026-09-02
 
 ### Fixed

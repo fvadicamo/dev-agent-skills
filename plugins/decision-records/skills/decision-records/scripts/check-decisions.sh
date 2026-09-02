@@ -182,16 +182,37 @@ status_form_of() {
 }
 
 # --- the records ------------------------------------------------------------------------
-# A template is not a record and an index is not a record. Both are excluded by NAME, which
-# is the one exclusion list in here: it names the two files every collection in the prior
-# art puts beside its records (adr-tools writes template.md, the ECC skill writes both).
+# A template is not a record and an index is not a record. This IS an exclusion list, which
+# is the pattern this repo's own coding rules call the common trap: it covers the cases you
+# thought of, on the day you wrote it. It was a list of three literals and it missed
+# ADR_template.md, found by running the validator over real collections rather than over
+# fixtures -- 8 files on the machine where it was found.
+#
+# It is a pattern now rather than a longer list, and the pattern is narrow ON PURPOSE.
+# Measured on the same disk, three REAL records whose slug contains the word:
+#   ADR-0020-prompt-template-architecture.md, ADR-012-round-3-member-templates.md,
+#   2026-08-26-template-source-role.md
+# Matching *template* would exclude all three, trading one false positive for three false
+# negatives -- the worse direction for a guard. So the word must be the whole name or a
+# whole leading/trailing component of it.
+#
+# And whatever it excludes is NAMED in "checks that did not run": a file the validator
+# decided not to look at is a decision, and a silent decision is the thing this script is
+# built to refuse.
+is_furniture() {
+    case "$(basename "$1" | lower)" in
+        readme.md|index.md|template.md) return 0 ;;
+        *[-_]template.md|template[-_]*.md)  return 0 ;;
+    esac
+    return 1
+}
+
 records=""
+excluded=""
 n=0
 for f in "$DIR"/*.md; do
     [ -e "$f" ] || continue
-    case "$(basename "$f" | lower)" in
-        readme.md|index.md|template.md) continue ;;
-    esac
+    if is_furniture "$f"; then excluded="$excluded $(basename "$f")"; continue; fi
     records="$records$f"$'\n'
     n=$((n + 1))
 done
@@ -344,6 +365,10 @@ say() { echo "$*"; violations=$((violations + 1)); }
 # silence, and there is no reason to think those were the last two.
 : > "$T/skipped"
 skipped() { printf '  %s\n' "$*" >> "$T/skipped"; }
+# After the definition, not before it. Written above it the call was a plain
+# "command not found" on stderr, which on a collection with no furniture would never have
+# appeared at all: the one shape where a defect shows up only on the inputs that exercise it.
+[ -n "$excluded" ] && skipped "excluded as furniture, not validated as records:$excluded"
 
 # The identifier a record claims, under the scheme this collection actually uses. Under a
 # dated scheme the whole filename is the identifier (the log4brains answer in adr/madr#28),
@@ -585,7 +610,7 @@ EOF
 
     while IFS= read -r b; do
         [ -n "$b" ] || continue
-        case "$(basename "$b" | lower)" in readme.md|index.md|template.md) continue ;; esac
+        is_furniture "$b" && continue
         # Resolved as the link WRITES it, relative to the collection. A link out of the
         # directory that does exist is not a dangling link; --portable is what says it will
         # break on a copy. Two questions, two checks.
