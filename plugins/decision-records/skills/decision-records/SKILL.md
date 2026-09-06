@@ -144,6 +144,19 @@ Three deliberate properties:
   to anyone checking the exit code, which is how a guard stops guarding while staying
   installed.
 
+## A declared limit: a status is assumed to be a token
+
+The `STATUS` and `DRIFT` checks assume the status field holds a **word**, and key the deduced
+vocabulary off its first word. Some collections put a paragraph there instead: a status word
+followed by two sentences of narrative and a list of cross-references. On those, the deduced
+vocabulary is the first word of prose and means nothing, and `--status` would report every
+such record as outside the vocabulary.
+
+That is a limit, not a bug to normalise away: deciding where a token ends inside free text is
+guesswork, and guessing is how a validator starts reporting a collection's own convention back
+to it. Do not pass `--status` on a collection whose status field carries prose. Everything
+else on it still works, because the other seven checks do not read that field.
+
 When the user asks "why did we decide X", read the index first, then the matching records,
 and answer from Context and Decision. If nothing matches, say so and offer to record one.
 

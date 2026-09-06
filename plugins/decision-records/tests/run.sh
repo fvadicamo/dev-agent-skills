@@ -550,6 +550,50 @@ echo "- [0004](0004-prompt-template-architecture.md)" >> "$d/README.md"
 got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c '(4 records)')
 ok 1 "$got" 'a record whose SLUG contains "template" is still a record, not furniture'
 
+echo "== round five: two internal contradictions, not two missing features =="
+# Both defects below were in ORIGINAL code that no round had exercised, not in lines any
+# correction introduced. That distinction is what said this was advancement and not a loop,
+# and both fixes REMOVE an asymmetry rather than add a shape to a list.
+
+# is_furniture() lowercases, so Index.md was already excluded from the records: the script
+# had decided it was an index and then refused to use it as one, reporting "no index" on a
+# directory that had one.
+d=$(nygard capital-index); rm "$d/README.md"
+{ echo "# Index"; for i in 1 2 3; do echo "- [000$i](000$i-decision-$i.md)"; done; } > "$d/Index.md"
+ok 0 "$(run "$d")" 'an index named Index.md is found, because the exclusion already matched it'
+ok 0 "$(skips 'INDEX:' "$d")" 'so the INDEX checks run instead of being skipped'
+echo "- [0004](0004-ghost.md)" >> "$d/Index.md"
+because 1 INDEX "$d"
+
+# status_of normalised the value in three of its four forms and not in the fourth, so a
+# value written **Accepted**, or as a bullet, reached --status raw and was reported outside
+# the vocabulary on EVERY record of a legitimate collection.
+d=$(nygard bold-value); for f in "$d"/000*.md; do sed -i.bak 's/^accepted$/**Accepted**/' "$f"; done; rm -f "$d"/*.bak
+ok 0 "$(run --status "accepted,proposed" "$d")" 'a status value written **Accepted** is the status, not markup plus a status'
+d=$(nygard bullet-value); for f in "$d"/000*.md; do sed -i.bak 's/^accepted$/- accepted/' "$f"; done; rm -f "$d"/*.bak
+ok 0 "$(run --status "accepted,proposed" "$d")" 'a status value written as a bullet is the status too'
+
+# And the semantics that follows: markup is not vocabulary. Typesetting one record's status
+# in bold is not a disagreement about the status; a different WORD is, and that still fires.
+d=$(nygard markup-only); sed -i.bak 's/^accepted$/**accepted**/' "$d/0001-decision-1.md"; rm -f "$d"/*.bak
+ok 0 "$(run "$d")" 'bold beside plain is the same status differently typeset, not DRIFT'
+d=$(nygard word-differs); sed -i.bak 's/^accepted$/**Accepted**/' "$d/0001-decision-1.md"; rm -f "$d"/*.bak
+because 1 DRIFT "$d"
+
+# Trailing sentence punctuation, found by the dogfood on a real 27-file collection whose
+# deduced vocabulary read "accepted accepted. accepted;". Same class and same fix as the two
+# above: punctuation is not vocabulary either. The character class is closed on purpose
+# ([.,;:]) rather than "any trailing non-word", because an open rule here is how a
+# normalisation starts eating meaning.
+d=$(nygard punctuated)
+sed -i.bak 's/^accepted$/accepted./' "$d/0001-decision-1.md"
+sed -i.bak 's/^accepted$/accepted;/' "$d/0002-decision-2.md"
+rm -f "$d"/*.bak
+ok 0 "$(run --status "accepted,proposed" "$d")" 'a status written "accepted." is the same status, not one outside the vocabulary'
+ok 0 "$(run "$d")" 'and it is not DRIFT either: punctuation is not a second spelling'
+got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c 'status vocabulary : accepted$')
+ok 1 "$got" 'the deduced vocabulary carries the status once, not three punctuated variants'
+
 echo "== the template and the index are not records =="
 d=$(nygard furniture); printf -- '---\nstatus: x\n---\n# T\n\n## Placeholder\n' > "$d/template.md"
 ok 0 "$(run "$d")" 'a template.md beside the records is excluded, not validated as one'

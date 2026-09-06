@@ -70,11 +70,11 @@ The override is what makes this bench provable rather than decorative:
 ```sh
 printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/always-ok.sh
 CHECK_SCRIPT=/tmp/always-ok.sh bash plugins/decision-records/tests/run.sh
-# -- 44 passed, 55 failed --
+# -- 51 passed, 58 failed --
 ```
 
 A bench nobody has seen fail says nothing. Pointing it at a script that always exits 0
-turns 55 of the 99 cases red; the 44 that stay green are the ones asserting a clean
+turns 58 of the 109 cases red; the 51 that stay green are the ones asserting a clean
 collection passes (plus the eight that read the script's own text), which is exactly what a
 stub gets right by accident. That ratio is the reason the coverage sweep below exists: a
 stub passing 43 cases is a reminder that "the suite is green" and "the guards are held" are
@@ -152,8 +152,14 @@ followed, and each found defects the previous one had not:
 | 2 | a fresh-context read of the diff | seven code defects and one guard with no case |
 | 3 | a fresh-context read of the **corrections** | two of round 2's fixes had restored the defect they removed in the other half of the code, three widened patterns had new false positives, and the fix for one uncovered guard had added another |
 | 4 | running the validator over **real collections** | the furniture exclusion was three literals and missed `ADR_template.md`, so the tool was wrong about every collection using that name. No review found it, and no fixture could have: the suite only ever saw names its author had written |
+| 5 | reproducing the three findings a review had left as "your call" | two of them were **false positives**, not the silences they had been filed as. Both were internal contradictions: the script normalised a status value in three of its four forms and not the fourth, and it excluded `Index.md` from the records while refusing to use it as the index |
 
-Round 4 is the cheapest and it should have come first: point the thing at real data. Round 3 is the one to read twice. A correction is new code, and new code is where the next
+Round 4 is the cheapest and it should have come first: point the thing at real data. Round 3
+is the one to read twice. Round 5 carries the rule that ended the sequence: a finding is worth
+code when it is a **contradiction already inside the script** (a normalisation applied to three
+of four branches, a lowering applied in one of two places), because that fix removes an
+asymmetry and adds no surface. A finding that asks for a **new shape** goes to the issue
+tracker instead, unless real data produced it. A correction is new code, and new code is where the next
 defect goes; a fix applied to one of two call sites leaves the defect alive at the other.
 That is why the coverage sweep above is run over every site rather than over the sites a
 correction happened to touch.

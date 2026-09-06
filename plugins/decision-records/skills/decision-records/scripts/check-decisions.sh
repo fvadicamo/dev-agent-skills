@@ -131,7 +131,22 @@ status_of() {
         grab && /^[[:space:]]*$/ { next }
         grab { print; exit }
     ')
-    printf '%s' "$v" | sed -e 's/^["'"'"']//' -e 's/["'"'"']$//' -e 's/[[:space:]]*$//'
+    # ONE normalisation, at the end, for all four forms. Three of them used to strip the
+    # markup on the way in and the fourth did not strip anything, which is the asymmetry that
+    # let a value written **Accepted**, or as a "- accepted" bullet, through raw. With
+    # --status that produced a violation on EVERY record of a legitimate collection, the
+    # failure this whole script exists to avoid; without it, DRIFT compared markup instead of
+    # the status and saw nothing.
+    #
+    # Markup is not vocabulary: **Accepted** and Accepted are the SAME status differently
+    # typeset, and after this they compare equal. What DRIFT is for is Accepted beside
+    # accepted, a difference in the word, and that still fires.
+    printf '%s' "$v" | sed \
+        -e 's/^[[:space:]]*[-*+][[:space:]]\{1,\}//' \
+        -e 's/^[*_]\{1,2\}//' -e 's/[*_]\{1,2\}$//' \
+        -e 's/^["'"'"']//' -e 's/["'"'"']$//' \
+        -e 's/[[:space:]]*[.,;:]$//' \
+        -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 }
 
 # The .md files an index links to, as the path each link WRITES. Two shapes, because both
@@ -333,11 +348,20 @@ vocab=$(cut -f2 "$T/statuses" | awk '{print $1}' | grep -v '^$' | lower | sort -
 # The index is the candidate that actually LINKS to records, not the first one that exists.
 # A collection whose index is index.md and whose README.md is prose about the collection is
 # an ordinary shape, and picking README.md there reported every record as unindexed.
+# Matched case-insensitively, over the files that are actually there, because is_furniture()
+# already lowercases and therefore already EXCLUDES Index.md from the records: the script had
+# decided it was an index and then refused to use it as one, so the checks reported "no index"
+# on a directory that had one. Same lowering in both places closes the contradiction rather
+# than adding a fourth literal to a list.
 index=""
-for cand in "$DIR/README.md" "$DIR/readme.md" "$DIR/index.md"; do
-    [ -f "$cand" ] || continue
+for cand in "$DIR"/*.md; do
+    [ -e "$cand" ] || continue
+    case "$(basename "$cand" | lower)" in readme.md|index.md) ;; *) continue ;; esac
     links_a_record "$cand" || continue
-    index="$cand"; break
+    case "$(basename "$cand" | lower)" in
+        readme.md) index="$cand"; break ;;               # README wins when both qualify
+        *)         [ -n "$index" ] || index="$cand" ;;
+    esac
 done
 
 # --- report the convention before judging anything against it ----------------------------

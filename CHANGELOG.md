@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.2] - 2026-09-06
+
+### Fixed
+
+#### decision-records plugin, **0.2.1 -> 0.2.2**
+
+Three findings an earlier review had filed as "smaller, your call" were reproduced before
+deciding, and **two of them turned out to be false positives rather than the silences they
+had been recorded as**: with `--status` they reported a violation on every record of a
+legitimate collection. That measurement is what moved them from backlog to now.
+
+All three were **contradictions already inside the script**, not missing features, and each
+fix removes an asymmetry rather than adding a shape:
+
+- `status_of` normalised the value in three of its four forms and not in the fourth, so a
+  status written `**Accepted**`, or as a `- accepted` bullet under `## Status`, reached the
+  checks raw. There is one normalisation now, applied at the end to all four forms. It follows
+  that **markup is not vocabulary**: bold beside plain is the same status differently typeset
+  and no longer reads as drift, while `Accepted` beside `accepted` still does, which is what
+  `DRIFT` is for.
+- `is_furniture()` lowercases, so `Index.md` was already **excluded from the records** as an
+  index; the candidate selection then compared three literals and never used it as one,
+  reporting "no index" on a directory that had one. Both places lower now.
+- Trailing sentence punctuation (`accepted.`, `accepted;`) was part of the value. Found by the
+  dogfood on a real 27-file collection whose deduced vocabulary read
+  `accepted accepted. accepted;`. The stripped set is closed (`[.,;:]`) on purpose: an open
+  rule there is how a normalisation starts eating meaning.
+
+### Added
+
+- **A declared limit** in `SKILL.md`: `STATUS` and `DRIFT` assume the status field holds a
+  **token**, and key the vocabulary off its first word. Some collections put a paragraph there
+  instead, and on those the deduced vocabulary is the first word of prose. Deciding where a
+  token ends inside free text is guesswork, and guessing is how a validator starts reporting a
+  collection's own convention back to it, so this is written down as a limit rather than
+  normalised away. The remedy is one line: do not pass `--status` there. The other seven checks
+  do not read that field and are unaffected.
+
+### Changed
+
+- 99 cases -> **109**. Against a stub that always exits 0: 51 passed, 58 failed.
+- Marketplace `metadata.version` 1.15.1 -> **1.15.2**.
+
 ## [1.15.1] - 2026-09-02
 
 ### Fixed
