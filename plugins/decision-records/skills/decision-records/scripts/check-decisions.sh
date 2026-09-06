@@ -2,10 +2,12 @@
 # Validate a collection of decision records against the convention THAT COLLECTION
 # already follows, rather than against a published spec it may never have adopted.
 #
-# check-decisions.sh 0.1.0 -- canonical copy: decision-records skill (dev-agent-skills),
+# check-decisions.sh -- canonical copy: decision-records skill (dev-agent-skills),
 # skills/decision-records/scripts/check-decisions.sh. Run in place. Unlike privacy-guard's
 # check_privacy.sh this script is NOT copied into the repos it inspects, so there is no
-# second copy to drift: the version line above is provenance, not a sync marker.
+# second copy to drift, and therefore no version to carry here. It used to say 0.1.0 while
+# the plugin shipped 0.2.2: a number nothing synchronises is a number that lies, and the
+# version that means something is the plugin's, in .claude-plugin/plugin.json.
 #
 #   check-decisions.sh [--require "A,B"] [--status "a,b"] [--portable] DIR
 #
@@ -143,6 +145,7 @@ status_of() {
     # accepted, a difference in the word, and that still fires.
     printf '%s' "$v" | sed \
         -e 's/^[[:space:]]*[-*+][[:space:]]\{1,\}//' \
+        -e 's/^\([*_]\{1,2\}\)\([^*_]\{1,\}\)\1/\2/' \
         -e 's/^[*_]\{1,2\}//' -e 's/[*_]\{1,2\}$//' \
         -e 's/^["'"'"']//' -e 's/["'"'"']$//' \
         -e 's/[[:space:]]*[.,;:]$//' \
@@ -181,18 +184,29 @@ links_a_record() {
     while IFS= read -r l; do
         [ -n "$l" ] || continue
         case "$l" in */*) continue ;; esac
-        [ -f "$DIR/$l" ] && printf '%s\n' "$records" | grep -qxF "$DIR/$l" && return 0
+        [ -f "$DIR/$l" ] && grep -qxF "$DIR/$l" <<<"$records" && return 0
     done <<EOF
 $(index_links "$1")
 EOF
     return 1
 }
 
+# Herestrings, not pipes, and the body read ONCE. With `set -o pipefail`, `producer | grep -q`
+# is a race: grep exits at the first match, the producer dies of SIGPIPE, the pipeline status
+# becomes 141 and the `if` reads FALSE. It only bites once the producer's output exceeds the
+# pipe buffer, so it is invisible on small fixtures and shows up on real records. Measured on a
+# 12-record collection where every record carries a "- Status:" bullet: the reported status
+# form flipped between `bullet` and `none` across identical runs, 5 times out of 8.
+#
+# That is worse than a wrong answer. The convention report is what SKILL.md calls *the
+# convention*, and a value that changes between runs cannot be reasoned about at all.
 status_form_of() {
-    if frontmatter_of "$1" | grep -qiE '^[[:space:]]*status:'; then echo frontmatter
-    elif body_of "$1" | grep -qiE '^ {0,3}[-*+][[:space:]]+[*_]{0,2}status[*_]{0,2}[[:space:]]*:'; then echo bullet
-    elif body_of "$1" | grep -qiE '^ {0,3}[*_]{1,2}Status[*_]{1,2}[[:space:]]*:'; then echo bold-field
-    elif body_of "$1" | grep -qiE '^##[[:space:]]+status[[:space:]]*$'; then echo section
+    local fm body
+    fm=$(frontmatter_of "$1"); body=$(body_of "$1")
+    if   grep -qiE '^[[:space:]]*status:' <<<"$fm"; then echo frontmatter
+    elif grep -qiE '^ {0,3}[-*+][[:space:]]+[*_]{0,2}status[*_]{0,2}[[:space:]]*:' <<<"$body"; then echo bullet
+    elif grep -qiE '^ {0,3}[*_]{1,2}Status[*_]{1,2}[[:space:]]*:' <<<"$body"; then echo bold-field
+    elif grep -qiE '^##[[:space:]]+status[[:space:]]*$' <<<"$body"; then echo section
     else echo none; fi
 }
 
@@ -353,16 +367,29 @@ vocab=$(cut -f2 "$T/statuses" | awk '{print $1}' | grep -v '^$' | lower | sort -
 # decided it was an index and then refused to use it as one, so the checks reported "no index"
 # on a directory that had one. Same lowering in both places closes the contradiction rather
 # than adding a fourth literal to a list.
+# The order is DECLARED, not inherited from the glob. Iterating "$DIR"/*.md and taking the
+# first readme-class hit made the choice depend on the collation of the ambient locale: with
+# both README.md and readme.md present, LC_ALL=C picked README.md and exited 0 while
+# en_US.UTF-8 picked readme.md and reported two records unindexed. Same directory, two
+# verdicts, and the one this machine produces by default was the wrong one. That regression
+# arrived with the fix for Index.md, which is the whole argument for pinning an order here.
 index=""
-for cand in "$DIR"/*.md; do
-    [ -e "$cand" ] || continue
-    case "$(basename "$cand" | lower)" in readme.md|index.md) ;; *) continue ;; esac
-    links_a_record "$cand" || continue
-    case "$(basename "$cand" | lower)" in
-        readme.md) index="$cand"; break ;;               # README wins when both qualify
-        *)         [ -n "$index" ] || index="$cand" ;;
-    esac
+for want in README.md readme.md index.md Index.md INDEX.md; do
+    [ -n "$index" ] && break
+    [ -f "$DIR/$want" ] || continue
+    links_a_record "$DIR/$want" && index="$DIR/$want"
 done
+# Any remaining case variant, in C collation so the answer does not move with the locale.
+if [ -z "$index" ]; then
+    while IFS= read -r cand; do
+        [ -n "$cand" ] || continue
+        case "$(basename "$cand" | lower)" in readme.md|index.md) ;; *) continue ;; esac
+        links_a_record "$cand" || continue
+        index="$cand"; break
+    done <<EOF
+$(for c in "$DIR"/*.md; do [ -f "$c" ] && printf '%s\n' "$c"; done | LC_ALL=C sort)
+EOF
+fi
 
 # --- report the convention before judging anything against it ----------------------------
 echo "Collection: $DIR ($n records)"

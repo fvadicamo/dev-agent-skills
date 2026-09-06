@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.3] - 2026-09-06
+
+### Fixed
+
+#### decision-records plugin, **0.2.2 -> 0.2.3**
+
+- **The convention report was nondeterministic, and had been since the first version.**
+  `producer | grep -q` under `set -o pipefail` is a race: `grep` exits at the first match, the
+  producer dies of SIGPIPE, the pipeline status becomes 141 and the `if` reads false. It only
+  bites once the producer's output passes the pipe buffer, which is why every fixture in the
+  suite was too small to see it. Measured on a 12-record collection where every record carries
+  a `- Status:` bullet: the reported status form flipped between `bullet` and `none` across
+  identical runs, 5 times out of 8. Now 12 runs out of 12 agree. Two of the 27 real
+  collections on the machine where this was found had their convention reported wrongly by
+  that race, and now report correctly. The same shape was fixed in `links_a_record`, where the
+  producer is the whole record list.
+- **A regression introduced by 1.15.2**: the index candidate was chosen by glob order, which
+  is locale-collated. With `README.md` and `readme.md` both present, `LC_ALL=C` exited 0 and
+  `en_US.UTF-8` exited 1 with two records reported unindexed. Same directory, two verdicts,
+  and the ambient locale produced the wrong one. The order is declared now, and any remaining
+  case variant is resolved in `LC_ALL=C`.
+- **Emphasis wrapping the first word** was not markup to the normaliser, only emphasis
+  wrapping the whole value was. `**Superseded** by [0003](0003-x.md)` became
+  `Superseded** by …`, so `--status` reported a violation on every record of a collection
+  using that shape. That is inside the class `[1.15.2]` declared closed.
+- The script header carried `check-decisions.sh 0.1.0` while the plugin shipped 0.2.2. The
+  number is **removed** rather than synchronised: the header itself explains that this script
+  is never copied, so nothing was keeping that number true, and a number nothing synchronises
+  is a number that lies. The version that means something is the plugin's.
+
+### Changed
+
+- **The coverage sweep covers both families.** It had been run over every `say` site for two
+  rounds and reported none uncovered, which was true about the half it looked at: three
+  `skipped` sites had no case asserting them, and could have been deleted with the suite
+  green. 18 `say` sites and 10 `skipped` sites are now mutated one at a time, each must
+  produce at least one failure, and `tests/README.md` carries both loops.
+- 109 cases -> **118**. Against a stub that always exits 0: 54 passed, 64 failed. Across the
+  27 real collections, **no verdict changed** between 0.2.2 and 0.2.3.
+- Marketplace `metadata.version` 1.15.2 -> **1.15.3**.
+
+### Corrected in the 1.15.2 entry
+
+- It named `Index.md` as one of the two findings that "turned out to be false positives". It
+  was not: on 0.2.2's predecessor it exits 0, prints `index : none found`, lists `INDEX:`
+  among the checks that did not run, and produces no violation under `--status`. It is a
+  silence, exactly as it had been filed. The two that did fire on every record were the
+  un-normalised status value and the trailing punctuation.
+
 ## [1.15.2] - 2026-09-06
 
 ### Fixed
@@ -13,8 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Three findings an earlier review had filed as "smaller, your call" were reproduced before
 deciding, and **two of them turned out to be false positives rather than the silences they
-had been recorded as**: with `--status` they reported a violation on every record of a
-legitimate collection. That measurement is what moved them from backlog to now.
+had been recorded as**: the un-normalised status value and the sentence punctuation left
+inside it, each reporting a violation on every record of a legitimate collection under
+`--status`. The third, `Index.md`, is a silence exactly as it had been filed, and is fixed
+here for consistency rather than for severity. That measurement is what moved the first two
+from backlog to now.
 
 All three were **contradictions already inside the script**, not missing features, and each
 fix removes an asymmetry rather than adding a shape:

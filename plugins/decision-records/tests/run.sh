@@ -594,6 +594,56 @@ ok 0 "$(run "$d")" 'and it is not DRIFT either: punctuation is not a second spel
 got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c 'status vocabulary : accepted$')
 ok 1 "$got" 'the deduced vocabulary carries the status once, not three punctuated variants'
 
+echo "== round six: a race, a locale, and emphasis that only wrapped the whole value =="
+# The convention report was NONDETERMINISTIC. `producer | grep -q` under `set -o pipefail` is
+# a race: grep exits at the first match, the producer dies of SIGPIPE, the pipeline status is
+# 141 and the `if` reads false. It only bites once the output passes the pipe buffer, so it
+# was invisible on every fixture in this file and showed up on real records. The fixture is
+# deliberately big for that reason, and the assertion is that twelve runs agree.
+d="$T/race"; mkdir -p "$d"
+i=0
+while [ "$i" -lt 6 ]; do
+    i=$((i + 1))
+    { printf '# %s\n\n- Status: accepted\n\n## Context\n\n' "$i"
+      j=0; while [ "$j" -lt 400 ]; do j=$((j + 1)); printf 'padding line %s to push the producer past the pipe buffer\n' "$j"; done
+      printf '\n## Decision\n\ny\n'; } > "$d/000$i-d$i.md"
+done
+forms=$(r=0; while [ "$r" -lt 12 ]; do r=$((r + 1)); bash "$CHECK" "$d" 2>/dev/null | sed -n 's/.*status form *: //p'; done | sort -u | tr '\n' ' ')
+ok "bullet " "$forms" 'twelve runs on the same input report the same status form'
+
+# The index choice must not move with the locale. Taking the first readme-class hit in glob
+# order gave two verdicts for one directory, and the ambient locale produced the wrong one.
+d=$(nygard locale)
+{ echo "# i"; echo "- [0001](0001-decision-1.md)"; } > "$d/readme.md"
+a=$( LC_ALL=C           bash "$CHECK" "$d" >/dev/null 2>&1; echo $? )
+b=$( LC_ALL=en_US.UTF-8 bash "$CHECK" "$d" >/dev/null 2>&1; echo $? )
+ok "$a" "$b" 'README.md beside readme.md gives the same verdict under C and en_US.UTF-8'
+ok 0 "$a" 'and that verdict is the one README.md deserves, not the case-variant stub'
+
+# Emphasis wrapping the FIRST WORD, with the reference after it. The strip only handled the
+# ends of the whole value, so this stayed **Superseded** and fired on every record.
+d=$(nygard bold-first-word)
+sed -i.bak 's|^accepted$|**Superseded** by [0003](0003-decision-3.md)|' "$d/0001-decision-1.md"; rm -f "$d"/*.bak
+ok 0 "$(run --status "accepted,superseded" "$d")" 'emphasis around the first word is markup, not part of the status'
+got=$(bash "$CHECK" "$d" 2>/dev/null | grep -c 'status vocabulary : accepted superseded$')
+ok 1 "$got" 'and the deduced vocabulary carries the word, not the word plus asterisks'
+sed -i.bak 's|0003-decision-3.md|0009-gone.md|' "$d/0001-decision-1.md"; rm -f "$d"/*.bak
+because 1 SUPERSEDE "$d"
+
+echo "== the announcements themselves, not just the behaviour behind them =="
+# Three `skipped` sites were asserted by no case. The behaviour each one announces WAS pinned
+# (two same-day dated records are not a duplicate; --portable is opt-in), but the announcement
+# is the half a reader actually sees, and it could have been deleted with the suite green.
+# Found by mutating every `skipped` site the way every `say` site was already mutated: the
+# coverage sweep had been run over one of the two families and not the other.
+# Each assertion greps a substring unique to its site, or it would pass on a sibling's line.
+d=$(nygard noscheme-says); mv "$d/0002-decision-2.md" "$d/2026-02-02-decision-2.md"; mv "$d/0003-decision-3.md" "$d/three.md"
+ok 1 "$(skips 'no agreed scheme' "$d")" 'a collection with no agreed scheme says DUPLICATE has no identifier to compare'
+h=$(house dated-says)
+ok 1 "$(skips 'under a dated scheme' "$h")" 'a dated collection says why DUPLICATE cannot apply to it'
+d=$(nygard portable-says)
+ok 1 "$(skips 'not requested' "$d")" 'a run without --portable says the check was not requested'
+
 echo "== the template and the index are not records =="
 d=$(nygard furniture); printf -- '---\nstatus: x\n---\n# T\n\n## Placeholder\n' > "$d/template.md"
 ok 0 "$(run "$d")" 'a template.md beside the records is excluded, not validated as one'

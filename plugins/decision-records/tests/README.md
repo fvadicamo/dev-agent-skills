@@ -5,7 +5,10 @@ bash plugins/decision-records/tests/run.sh
 ```
 
 Covers `check-decisions.sh`. Exits non-zero on failure, runs on macOS and Linux, and
-touches nothing outside a temp directory.
+touches nothing outside a temp directory. About 14 seconds, most of it the `race` fixture,
+which builds six 400-line records and runs the script twelve times on them: the defect it
+holds down only appears once the producer's output passes the pipe buffer, so a small fixture
+cannot see it and a single run cannot either.
 
 ## What it covers
 
@@ -70,14 +73,14 @@ The override is what makes this bench provable rather than decorative:
 ```sh
 printf '#!/usr/bin/env bash\nexit 0\n' > /tmp/always-ok.sh
 CHECK_SCRIPT=/tmp/always-ok.sh bash plugins/decision-records/tests/run.sh
-# -- 51 passed, 58 failed --
+# -- 54 passed, 64 failed --
 ```
 
 A bench nobody has seen fail says nothing. Pointing it at a script that always exits 0
-turns 58 of the 109 cases red; the 51 that stay green are the ones asserting a clean
+turns 64 of the 118 cases red; the 54 that stay green are the ones asserting a clean
 collection passes (plus the eight that read the script's own text), which is exactly what a
 stub gets right by accident. That ratio is the reason the coverage sweep below exists: a
-stub passing 43 cases is a reminder that "the suite is green" and "the guards are held" are
+stub passing 54 cases is a reminder that "the suite is green" and "the guards are held" are
 two different statements.
 
 Stronger, and the check worth repeating after a change: **remove a guard from the real
@@ -89,7 +92,7 @@ claims to hold, because something earlier short-circuits. Measured on this suite
 | the empty-collection guard exits 0 instead of 2 | the two `exits 2` cases, and nothing else |
 | required sections by intersection instead of majority | the two `SECTION` cases |
 | the index checked in one direction only | `INDEX: idx-ghost`, alone |
-| the `- Status:` bullet form removed from `status_of` | the bullet `STATUS` case and *status VALUE was read* |
+| the `- Status:` bullet form removed from `status_of` | five cases, across the bullet block and the round-three cases that use that fixture |
 | `STATUS` fires per record even when no record has one | the two statusless cases |
 | the `<prefix>-NNN` scheme unrecognised | the `prefixed` report case and its `DUPLICATE` case |
 | the `## Status` reader does not stop at the next heading | the empty-section `STATUS` case and the vocabulary-leak case |
@@ -102,8 +105,8 @@ claims to hold, because something earlier short-circuits. Measured on this suite
 | the dated `NAME` guard neutered | the dated `NAME` case |
 
 Round three added its own, and they are not listed one by one because the sweep below
-supersedes the practice of listing them: every `say` site is now mutated, all eighteen, and
-each produces at least one failure.
+supersedes the practice of listing them: every site that emits a line is now mutated, the 18
+`say` sites and the 10 `skipped` sites, and each must produce at least one failure.
 
 Each mutation kills exactly the cases written for it, which is what says the cases are
 attached to the guards they name. Two of them are worth reading twice, because both times
@@ -125,7 +128,10 @@ could say so. Reading the file again would not have.
 
 Picking mutations by hand finds the guards you thought of. A second independent review found
 an uncovered guard that way and it was not the one the first review had found, so the check
-is now run over **every** `say` site in the script, one at a time:
+is run over **every site that emits a line**, one at a time. Note the plural: the sweep was
+run over the `say` family alone for two rounds, and a later review found three `skipped`
+sites that no case asserted. **A coverage sweep that covers one of two families reports
+"none uncovered" and is telling the truth about the half it looked at.**
 
 ```sh
 grep -n 'say "' skills/decision-records/scripts/check-decisions.sh | cut -d: -f1 |
@@ -135,16 +141,19 @@ while read -r L; do
 done
 ```
 
+Run the same loop with `skipped "` in place of `say "`, replacing it with `: skipped "` so
+the literal text the self-text cases grep for survives.
+
 Every line must produce at least one failure. A site that leaves the suite green is a guard
 nothing holds down, and it is invisible to reading, to the `CHECK_SCRIPT=` override and to a
 hand-picked mutation list. Run this under **bash**: in zsh a `for` over an unquoted variable
 does not split, the loop runs once with a broken `sed`, and the run reports "none uncovered"
 having tested nothing.
 
-## What three reviews cost, and why the count is the point
+## What six rounds cost, and why the count is the point
 
-The first version of this script was written with its suite. Three independent readings
-followed, and each found defects the previous one had not:
+The first version of this script was written with its suite. Six readings followed, and each
+found defects the previous one had not:
 
 | Round | Found by | What it found |
 |---|---|---|
@@ -152,10 +161,12 @@ followed, and each found defects the previous one had not:
 | 2 | a fresh-context read of the diff | seven code defects and one guard with no case |
 | 3 | a fresh-context read of the **corrections** | two of round 2's fixes had restored the defect they removed in the other half of the code, three widened patterns had new false positives, and the fix for one uncovered guard had added another |
 | 4 | running the validator over **real collections** | the furniture exclusion was three literals and missed `ADR_template.md`, so the tool was wrong about every collection using that name. No review found it, and no fixture could have: the suite only ever saw names its author had written |
-| 5 | reproducing the three findings a review had left as "your call" | two of them were **false positives**, not the silences they had been filed as. Both were internal contradictions: the script normalised a status value in three of its four forms and not the fourth, and it excluded `Index.md` from the records while refusing to use it as the index |
+| 5 | reproducing the three findings a review had left as "your call" | two of them were **false positives** and not the silences they had been filed as: the un-normalised status value, and sentence punctuation left inside it. Both fired on every record with `--status`. The third, `Index.md`, was a silence exactly as filed. All three were internal contradictions rather than missing shapes |
+| 6 | a review of the round-5 corrections | one of them was a **regression**: the index choice became locale-dependent, and the ambient locale produced the wrong verdict. It also found the oldest defect in the file, a `producer \| grep -q` race under `pipefail` that made the convention report **nondeterministic** on real records, and three `skipped` sites the coverage sweep had never covered because it only swept `say` |
 
-Round 4 is the cheapest and it should have come first: point the thing at real data. Round 3
-is the one to read twice. Round 5 carries the rule that ended the sequence: a finding is worth
+Round 4 is the cheapest and it should have come first: point the thing at real data. Rounds 3
+and 6 are the ones to read twice, because both found a **correction** that had introduced a
+defect, and round 6 found it in a fix written to close a review finding. Round 5 carries the rule that ended the sequence: a finding is worth
 code when it is a **contradiction already inside the script** (a normalisation applied to three
 of four branches, a lowering applied in one of two places), because that fix removes an
 asymmetry and adds no surface. A finding that asks for a **new shape** goes to the issue

@@ -171,8 +171,8 @@ grep -n -i -E -f <(grep -vE '^[[:space:]]*(#|$)' .local/privacy-denylist.txt) <d
 
 `check_privacy.sh` itself reads `git diff --cached`, so it covers a record on its way into a
 commit but not one already sitting in the tree. Its own skill names that limit and says to
-grep the tracked tree against the denylist by hand for an audit; the line above is one way
-to do that, written here rather than there.
+grep the tracked tree against the denylist by hand for an audit. The `grep -f` form is
+written out here rather than there, and reads that same gitignored file directly.
 
 ## Important rules
 

@@ -1,7 +1,7 @@
 {
   "name": "decision-records",
   "description": "Creates, supersedes and validates decision records (ADRs) against the convention a collection already follows, instead of against a published spec it may never have adopted. Ships the decision-records skill: a propose-then-write flow that never rewrites an accepted record, and check-decisions.sh, a validator that deduces the filename scheme, section set and status vocabulary from the records already present and reports eight classes of violation with a stable code and an exit status. Ships no template into the target repo, and delegates private-token scanning to privacy-guard rather than keeping a second denylist.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": {
     "name": "Francesco Vadicamo",
     "email": "fvadicamo@gmail.com"
