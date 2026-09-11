@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-09-11
+
+### Added
+
+#### decision-records plugin, **0.2.3 -> 0.3.0**
+
+- **`tests/claims.sh`, a bench of predicates over what the documentation claims.** `run.sh`
+  checks that the script does what it should; this checks that `tests/README.md` and
+  `SKILL.md` still say what is true: the case count, the stub run's two numbers, the site
+  counts in the coverage section, the number of checks written in prose above the table
+  listing them, and that every code the script can emit also has a line saying when it cannot
+  apply. 20 predicates. **Not** run from the pre-commit: it runs the suite twice and takes
+  about half a minute, so it is the check you run to close, before a release.
+- **Why a bench and not one more review.** Six rounds of re-reading had been run on this
+  plugin, and by the last ones most findings were about the previous round's corrections. A
+  chain like that has no natural end, because every correction creates surface. A green bench
+  says *what* was checked and *how*; "another reading found nothing" says neither, and does
+  not distinguish a clean run from a lazy one.
+- **The class it kills had bitten four times in one session**, and none of them was a code
+  defect that any suite could have caught: `43` green cases where there were 51, "three
+  reviews" over a five-row table, a mutation table saying three where the table had fourteen,
+  and a case count that went 96 to 99 to 109 to 118 while a paragraph two lines up kept the
+  old one.
+- Each predicate carries its counter-proof: the run ends by re-checking itself against a copy
+  of the tree with one number perturbed, which must go red. Every predicate was additionally
+  perturbed by hand, one at a time, and **the fifth perturbation revealed a broken
+  counter-proof rather than a broken predicate**: `sed` could not match a phrase that wraps
+  across two lines, so it changed nothing and the bench stayed green for the right reason.
+  Redone with a multi-line perturbation, the predicate reports `claimed=999 measured=18`.
+- The bench found two defects in itself on its first two runs, which is the argument for
+  writing the counter-proof into it rather than beside it: the code extraction carried a stray
+  quote (`"DRIFT` instead of `DRIFT`), so the membership predicate could not match anything
+  while the count predicate beside it stayed green; and the failure message named the two
+  sides the wrong way round, which would have sent a reader to correct the wrong file.
+
+### Changed
+
+- Marketplace `metadata.version` 1.15.3 -> **1.16.0**.
+
 ## [1.15.3] - 2026-09-06
 
 ### Fixed

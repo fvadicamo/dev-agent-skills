@@ -124,6 +124,37 @@ the first run killed **fewer** cases than expected and the case had to be re-anc
 In both cases the case was passing *beside* the guard it claimed to hold, and only mutation
 could say so. Reading the file again would not have.
 
+## The claims the documentation makes are a bench too
+
+```sh
+bash plugins/decision-records/tests/claims.sh     # ~30s, NOT run from the pre-commit
+```
+
+`run.sh` checks that the script does what it should. `claims.sh` checks that **this file, and
+`SKILL.md`, still say what is true**: the case count, the stub run's two numbers, the site
+counts in the sweep section, the number of checks written in prose above the table that lists
+them, and that every code the script can emit also has a line saying when it cannot apply.
+Each predicate reads the claim by pattern and compares it with the value produced by running,
+and the run ends by re-checking itself against a copy of the tree with one number perturbed,
+which must go red.
+
+It exists because that is the class that actually bit, four times in one session: `43` green
+cases where there were 51, "three reviews" over a five-row table, a mutation table saying
+three where the table had fourteen, and a case count that went 96 to 99 to 109 to 118 while a
+paragraph two lines up kept the old one. None of those is a code defect and no suite could
+have caught them.
+
+**Why a bench and not one more reading.** A chain of re-readings has no natural end: every
+correction creates surface, and by the sixth round most findings were about the previous
+round's corrections. A green bench says *what* was checked and *how*; "another reading found
+nothing" says neither, and does not distinguish a clean run from a lazy one.
+
+Two things it found about itself on its first two runs, which is the argument for writing the
+counter-proof into the bench rather than beside it: the code extraction carried a stray quote
+(`"DRIFT` instead of `DRIFT`), so the membership predicate could not match anything while the
+count predicate beside it stayed green; and the failure message named the two sides the wrong
+way round, which would have sent a reader to correct the wrong file.
+
 ## Coverage of the guards is measured, not sampled
 
 Picking mutations by hand finds the guards you thought of. A second independent review found
